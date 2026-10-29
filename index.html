@@ -162,6 +162,8 @@ function render(){
 }
 
 /* ===== Hjem ===== */
+/* Mobil er bare for spillere; vert/admin (spørsmål, quizstart) er kun på PC/nettbrett */
+function isPhone(){return window.matchMedia&&window.matchMedia('(max-width:700px)').matches}
 function vHome(){
   var kode=(location.search.match(/kode=(\d+)/)||[])[1]||'';
   var n=loadOwn().length;
@@ -170,9 +172,9 @@ function vHome(){
   '<input id="jcode" type="tel" inputmode="numeric" maxlength="4" placeholder="Kode (4 siffer)" value="'+esc(kode)+'">'+
   '<input id="jname" type="text" maxlength="14" placeholder="Ditt navn" value="'+esc(lsGet('fq-navn',''))+'">'+
   '<button class="btn" data-a="join">Bli med</button></div>'+
-  '<div class="card"><h2>Vær vert</h2><button class="btn" data-a="new">Start ny quiz</button>'+
+  (isPhone()?'':'<div class="card"><h2>Vær vert (admin)</h2><button class="btn" data-a="new">Start ny quiz</button>'+
   '<button class="btn ghost" data-a="own">Våre egne spørsmål ('+n+')</button></div>'+
-  '<p class="note">Verten må la appen stå åpen under hele quizen.</p></div>';
+  '<p class="note">Verten må la appen stå åpen under hele quizen.</p>')+'</div>';
 }
 
 /* ===== Egne spørsmål ===== */
