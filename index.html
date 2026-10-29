@@ -61,11 +61,13 @@ label.chk input{width:22px;height:22px}
 .sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;opacity:.7;margin:12px 0 2px}
 .cols{display:grid;grid-template-columns:1fr;gap:14px}
 @media(min-width:900px){.wrap{max-width:1000px}.qimg{max-height:46vh}.cols{grid-template-columns:1fr 1fr}}
+#refreshBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:8;width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:24px;line-height:1;padding:0}
 #errBox{display:none;position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;padding:10px;font-size:13px;z-index:9}
 </style>
 </head>
 <body>
 <div id="app"></div>
+<button id="refreshBtn" aria-label="Oppdater appen" title="Oppdater appen">&#x21BB;</button>
 <div id="errBox"></div>
 <script>
 /* ===== Spørsmålsbank: [spørsmål, riktig, feil1, feil2, feil3] ===== */
@@ -541,6 +543,16 @@ app.addEventListener('click',function(e){
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
 });
 
+$('#refreshBtn').addEventListener('click',function(){
+  if((H.peer||P.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
+  var go2=function(){location.reload()};
+  try{
+    var jobs=[];
+    if(navigator.serviceWorker)jobs.push(navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister()}))}));
+    if(window.caches)jobs.push(caches.keys().then(function(k){return Promise.all(k.map(function(x){return caches.delete(x)}))}));
+    Promise.all(jobs).then(go2,go2);
+  }catch(e){go2()}
+});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
 render();
 </script>
