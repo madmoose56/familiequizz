@@ -17,6 +17,13 @@ Repo: `madmoose56/familiequizz` → GitHub Pages (gren `main`, rot).
 - Spørsmålsbank `BANK` i index.html (6 kategorier × 8). Egne spørsmål (med valgfritt bilde, forminsket) lagres i localStorage `fq-egne` på vertens telefon.
 - Spillere som mister forbindelsen kobler seg på igjen med samme navn og beholder poengene.
 
+## Admin (kun PC)
+- Mobil (<700 px) viser bare «Bli med»; vert/admin skjules (`isPhone()`). Admin har tre faner: Start quiz, Temaer, Egne spørsmål.
+- Faste billedtemaer ligger i `temaer.js` (skuespillere, byer; laget av et engangsskript mot Wikipedia, bilder fra Commons).
+- Tema-bygger: søker Wikidata (SPARQL, ett søk per land, 4 samtidig, 70 s timeout) med filtre yrke/kjønn/fødselsår/land/«hvor kjente». Resultatet kan trimmes og lagres som eget tema i localStorage `fq-temaer`. Bilder via Commons `Special:FilePath?width=500`.
+- Oppdater-pil (↻) øverst til høyre tømmer cache og laster på nytt.
+
 ## Arbeidsmåte
+- Mappen ligger på `D:\iPhone\Familiequizz`.
 - Rediger `index.html`, bump `sw.js`, commit og push til `main`.
 - Si fra tydelig hva som er testet og hva som bare kan bekreftes på iPhone.
