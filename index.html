@@ -473,13 +473,13 @@ function hostMsg(conn,m){
     sendTo(p);refreshHost();
   }else if(m.t==='buzz'){
     var bp=H.players[conn._name];
-    if(!bp||H.cfg.mode!=='b'||H.phase!=='q'||H.locked[bp.name])return;
+    if(!bp||H.qmode!=='b'||H.phase!=='q'||H.locked[bp.name])return;
     H.winner=bp.name;H.phase='buzz';H.left=Math.max(0,H.endsAt-Date.now());
     if(H.timer){clearInterval(H.timer);H.timer=null}
     broadcast();render();
   }else if(m.t==='ans'){
     var pl=H.players[conn._name];
-    if(!pl||H.cfg.mode==='b'||H.phase!=='q'||pl.ans)return;
+    if(!pl||H.qmode==='b'||H.phase!=='q'||pl.ans)return;
     var c=m.c|0,q=H.qs[H.qi],left=Math.max(0,H.endsAt-Date.now()),ok=c===q.correct;
     pl.ans={c:c,ok:ok,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
     conn.send({t:'a',c:c});
@@ -489,10 +489,10 @@ function hostMsg(conn,m){
 }
 function hostDrop(conn){
   var p=H.players[conn._name];
-  if(p&&p.conn===conn){p.online=false;refreshHost();if(H.phase==='q'&&H.cfg.mode!=='b'&&allAnswered())hostReveal();else if(H.phase==='q')checkBuzzEnd()}
+  if(p&&p.conn===conn){p.online=false;refreshHost();if(H.phase==='q'&&H.qmode!=='b'&&allAnswered())hostReveal();else if(H.phase==='q')checkBuzzEnd()}
 }
 function checkBuzzEnd(){
-  if(H.cfg.mode!=='b'||H.phase!=='q')return false;
+  if(H.qmode!=='b'||H.phase!=='q')return false;
   var o=onlineList();
   if(o.length&&o.every(function(p){return H.locked[p.name]})){hostReveal();return true}
   return false;
@@ -523,10 +523,10 @@ function stateFor(p){
   var q=H.qs[H.qi],r=ranked();
   function top(n){return r.slice(0,n).map(function(x){return {name:x.name,score:x.score}})}
   if(H.phase==='lobby')return {t:'s',ph:'lobby',n:r.length};
-  if(H.phase==='q')return {t:'s',ph:'q',b:H.cfg.mode==='b',locked:!!H.locked[p.name],i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
+  if(H.phase==='q')return {t:'s',ph:'q',b:H.qmode==='b',locked:!!H.locked[p.name],i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
   if(H.phase==='buzz')return {t:'s',ph:'buzz',i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,who:H.winner,you:H.winner===p.name,locked:!!H.locked[p.name]};
   if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
-    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{b:H.cfg.mode==='b',c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
+    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{b:H.qmode==='b',c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
@@ -539,7 +539,7 @@ function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   if(H.qi+1>=H.qs.length){H.phase='end'}
   else{
-    H.qi++;H.phase='q';H.endsAt=Date.now()+H.cfg.secs*1000;H.locked={};H.winner=null;
+    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.endsAt=Date.now()+H.cfg.secs*1000;H.locked={};H.winner=null;
     for(var k in H.players){H.players[k].ans=null;H.players[k].bz=0}
     startTimer();
   }
@@ -551,7 +551,7 @@ function hostReveal(){
   H.phase='reveal';H.counts=[0,0,0,0];H.winner=null;
   for(var k in H.players){
     var p=H.players[k];
-    if(H.cfg.mode==='b'){p.last={c:null,ok:(p.bz||0)>0,gain:p.bz||0};continue}
+    if(H.qmode==='b'){p.last={c:null,ok:(p.bz||0)>0,gain:p.bz||0};continue}
     p.last=p.ans||{c:null,ok:false,gain:0};
     p.score+=p.last.gain;
     if(p.last.c!=null&&p.last.c>=0&&p.last.c<4)H.counts[p.last.c]++;
@@ -578,7 +578,7 @@ function optsHtml(q,mode){
   for(var i=0;i<q.opts.length;i++){
     var cls='opt o'+i;
     if(mode==='reveal')cls+=(i===q.correct?' right':' dim');
-    h+='<div class="'+cls+'"><b>'+LETT[i]+'</b><span>'+esc(q.opts[i])+'</span>'+(mode==='reveal'&&H.cfg.mode!=='b'?'<em class="cnt" style="font-style:normal">'+H.counts[i]+'</em>':'')+'</div>';
+    h+='<div class="'+cls+'"><b>'+LETT[i]+'</b><span>'+esc(q.opts[i])+'</span>'+(mode==='reveal'&&H.qmode!=='b'?'<em class="cnt" style="font-style:normal">'+H.counts[i]+'</em>':'')+'</div>';
   }
   return h+'</div>';
 }
@@ -586,6 +586,11 @@ function scoreRows(list,max){
   var h='',medal=['🥇','🥈','🥉'];
   list.slice(0,max).forEach(function(p,i){h+='<div class="score"><span>'+(medal[i]||(i+1)+'.')+' '+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
   return h||'<p class="note">Ingen spillere.</p>';
+}
+function modeToggle(label){
+  return '<div class="sec" style="text-align:center">'+label+'</div><div class="tabs" style="justify-content:center;padding-right:0">'+
+  '<button class="tab'+(H.cfg.mode==='a'?' on':'')+'" data-a="setmode" data-v="a">A B C D</button>'+
+  '<button class="tab'+(H.cfg.mode==='b'?' on':'')+'" data-a="setmode" data-v="b">🔔 Buzzer (muntlig svar)</button></div>';
 }
 function lockedHtml(){
   var n=[];for(var k in H.locked)n.push(esc(k));
@@ -599,12 +604,13 @@ function vHost(){
     '<div class="small">og skriv inn koden</div><div class="code">'+H.code+'</div>'+
     '<button class="btn ghost" data-a="share">Del lenke med kode</button>'+
     '<div class="chips">'+(r.length?r.map(function(p){return '<span class="chip'+(p.online?'':' off')+'">'+esc(p.name)+'</span>'}).join(''):'<span class="note">Venter på spillere…</span>')+'</div>'+
+    modeToggle('Spillmåte for første spørsmål')+
     '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
     '<button class="btn red" data-a="close">Avslutt</button>';
   }else if(H.phase==='q'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
-    (H.cfg.mode==='b'
+    (H.qmode==='b'
       ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
       :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
     '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
@@ -619,6 +625,7 @@ function vHost(){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
     '<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>'+
+    (H.qi+1>=H.qs.length?'':modeToggle('Neste spørsmål spilles som'))+
     '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
     (H.qi+1>=H.qs.length?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else{
@@ -776,6 +783,7 @@ app.addEventListener('click',function(e){
   }
   else if(a==='ans')playerAnswer(i);
   else if(a==='buzz')playerBuzz();
+  else if(a==='setmode'){H.cfg.mode=b.getAttribute('data-v');render()}
   else if(a==='jok')hostJudge(true);
   else if(a==='jno')hostJudge(false);
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
