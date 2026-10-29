@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Familiequizz">
+<meta name="theme-color" content="#2e1065">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Familiequizz</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#fff;background:linear-gradient(160deg,#1e1b4b,#4c1d95 60%,#7e22ce);background-attachment:fixed;min-height:100vh}
+.wrap{max-width:720px;margin:0 auto;padding:calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom))}
+h1{font-size:34px;margin:8px 0 2px;text-align:center}
+h2{font-size:18px;margin:0 0 10px}
+.sub{text-align:center;opacity:.8;margin:0 0 18px}
+.card{background:rgba(255,255,255,.12);border-radius:16px;padding:16px;margin-bottom:14px}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:15px;font-size:18px;font-weight:700;color:#3b0764;background:#fde047;margin:8px 0 0;cursor:pointer}
+.btn:disabled{opacity:.4}
+.btn.ghost{background:rgba(255,255,255,.18);color:#fff}
+.btn.red{background:#fecaca;color:#7f1d1d}
+input[type=text],input[type=tel],select,textarea{width:100%;font-size:18px;padding:12px;border-radius:12px;border:0;margin:6px 0;background:#fff;color:#1e1b4b;font-family:inherit}
+label.chk{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:18px}
+label.chk input{width:22px;height:22px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.note{text-align:center;opacity:.7;font-size:14px}
+.code{font-size:72px;font-weight:800;letter-spacing:8px;text-align:center;color:#fde047;line-height:1.1}
+.url{text-align:center;font-size:18px;word-break:break-all;opacity:.9}
+.small{text-align:center;font-size:14px;opacity:.7;margin-top:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0}
+.chip{background:rgba(255,255,255,.2);border-radius:20px;padding:8px 14px;font-size:18px;font-weight:600}
+.chip.off{opacity:.4}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:18px;opacity:.9;margin-bottom:8px}
+.cd{font-size:34px;font-weight:800;color:#fde047;min-width:60px;text-align:right}
+.q{font-size:clamp(24px,5vw,40px);font-weight:800;text-align:center;margin:10px 0 14px;line-height:1.2}
+.qimg{display:block;max-width:100%;max-height:38vh;margin:0 auto 14px;border-radius:14px}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opt{border:0;border-radius:14px;padding:18px 10px;min-height:84px;font-size:clamp(17px,3.6vw,26px);font-weight:700;color:#fff;text-align:left;display:flex;gap:10px;align-items:center;font-family:inherit}
+.opt b{background:rgba(0,0,0,.25);border-radius:8px;min-width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.opt span{flex:1}
+.o0{background:#e11d48}.o1{background:#2563eb}.o2{background:#d97706}.o3{background:#059669}
+.opt.dim{opacity:.25}
+.opt.right{outline:5px solid #fde047}
+.opt.mine{outline:5px solid #fff}
+.opt:disabled{color:#fff}
+.cnt{margin-left:auto;font-size:.8em;opacity:.95}
+.big{font-size:44px;font-weight:800;text-align:center;margin:14px 0 4px}
+.score{display:flex;justify-content:space-between;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.15);font-size:20px}
+.score:last-child{border:0}
+.score b{color:#fde047}
+.ok{color:#86efac}.no{color:#fca5a5}
+.qrow{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.15)}
+.qrow span{flex:1}
+.qrow img{width:40px;height:40px;object-fit:cover;border-radius:8px}
+.x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;padding:8px 12px;font-size:16px}
+#errBox{display:none;position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;padding:10px;font-size:13px;z-index:9}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="errBox"></div>
+<script>
+/* ===== Spørsmålsbank: [spørsmål, riktig, feil1, feil2, feil3] ===== */
+var BANK={
+'Geografi':[
+['Hva er hovedstaden i Australia?','Canberra','Sydney','Melbourne','Perth'],
+['Hva er Norges lengste elv?','Glomma','Drammenselva','Tana','Numedalslågen'],
+['Hva er verdens største hav?','Stillehavet','Atlanterhavet','Indiahavet','Nordishavet'],
+['Hva heter Norges høyeste fjell?','Galdhøpiggen','Glittertind','Snøhetta','Store Skagastølstind'],
+['Hva er hovedstaden i Canada?','Ottawa','Toronto','Vancouver','Montreal'],
+['I hvilket land ligger byen Marrakech?','Marokko','Egypt','Tunisia','Algerie'],
+['Hvilken norsk by kalles «Regnbyen»?','Bergen','Stavanger','Trondheim','Tromsø'],
+['Hva er hovedstaden i Island?','Reykjavik','Tórshavn','Nuuk','Helsinki']],
+'Film og TV':[
+['Hva heter klovnefisken som blir borte i Pixar-filmen fra 2003?','Nemo','Dory','Bruce','Gill'],
+['Hvem spiller Jack Sparrow i «Pirates of the Caribbean»?','Johnny Depp','Orlando Bloom','Brad Pitt','Tom Cruise'],
+['Hva heter trollmannsskolen i Harry Potter på norsk?','Galtvort','Durmstrang','Beauxbatons','Ilvermorny'],
+['Hvilken Disney-film har sangen «Let It Go»?','Frost','Skjønnheten og udyret','Vaiana','Rapunsel'],
+['Hva heter Elsas søster i Frost?','Anna','Kristoffer','Olav','Sven'],
+['Hvem regisserte «Titanic» fra 1997?','James Cameron','Steven Spielberg','Ridley Scott','George Lucas'],
+['Hvilken farge har Smurfene?','Blå','Grønn','Rød','Gul'],
+['I hvilken film møter vi løven Simba?','Løvenes konge','Madagaskar','Jungelboken','Dumbo']],
+'Musikk':[
+['Hvilket band besto av John, Paul, George og Ringo?','The Beatles','The Rolling Stones','Queen','Abba'],
+['Hvem sang «Dancing Queen»?','ABBA','Madonna','Bee Gees','Boney M'],
+['Hvilket land kommer ABBA fra?','Sverige','Norge','Danmark','Finland'],
+['Hvor mange strenger har en vanlig gitar?','6','4','5','8'],
+['Hvem vant Eurovision for Norge i 2009 med «Fairytale»?','Alexander Rybak','Jahn Teigen','Bobbysocks','Keiino'],
+['Hva heter Norges nasjonalsang?','Ja, vi elsker dette landet','Sønner av Norge','Norge i rødt, hvitt og blått','Kongesangen'],
+['Hvilket instrument har svarte og hvite taster?','Piano','Fiolin','Trommer','Fløyte'],
+['Hvem kalles «Kongen av pop»?','Michael Jackson','Elvis Presley','Prince','Justin Bieber']],
+'Historie':[
+['Hvilket år ble Norge selvstendig fra Sverige?','1905','1814','1884','1945'],
+['Hvilket år sluttet andre verdenskrig i Europa?','1945','1918','1939','1953'],
+['Hvem ble Norges konge etter selvstendigheten i 1905?','Haakon VII','Olav V','Harald V','Oscar II'],
+['Hvilket år ble Norges grunnlov vedtatt på Eidsvoll?','1814','1905','1750','1864'],
+['Hvilket folk er kjent for å seile i langskip?','Vikingene','Romerne','Grekerne','Egypterne'],
+['Hvem var den første personen på månen?','Neil Armstrong','Buzz Aldrin','Juri Gagarin','John Glenn'],
+['Hvilket år falt Berlinmuren?','1989','1961','1975','2001'],
+['Hvilket land bygde pyramidene i Giza?','Egypt','Mexico','Hellas','Peru']],
+'Natur og vitenskap':[
+['Hvilken planet er nærmest solen?','Merkur','Venus','Mars','Jorden'],
+['Hvor mange ben har en edderkopp?','8','6','10','4'],
+['Hvor mange planeter har solsystemet vårt?','8','9','7','10'],
+['Hvilken gass trenger vi for å puste?','Oksygen','Nitrogen','Helium','Karbondioksid'],
+['Hva kalles en baby-frosk?','Rumpetroll','Larve','Kylling','Yngel'],
+['Hvilket dyr er raskest på land?','Gepard','Løve','Hest','Antilope'],
+['Hva er verdens største landdyr?','Elefant','Neshorn','Flodhest','Sjiraff'],
+['Hva er det kjemiske symbolet for gull?','Au','Ag','Go','Gd']],
+'Mat og drikke':[
+['Hvilket land kommer pizza opprinnelig fra?','Italia','Frankrike','USA','Hellas'],
+['Hva er hovedingrediensen i guacamole?','Avokado','Tomat','Agurk','Lime'],
+['Hva lages ost av?','Melk','Egg','Mel','Fisk'],
+['Hvilket land kommer sushi fra?','Japan','Kina','Thailand','Korea'],
+['Hva er brunost hovedsakelig laget av?','Myse','Kakao','Karamell','Soyabønner'],
+['Hva heter det lange, tynne franske brødet?','Baguette','Croissant','Focaccia','Ciabatta'],
+['Hva slags frukt er «Granny Smith»?','Eple','Pære','Drue','Plomme'],
+['Hva er lutefisk laget av?','Tørrfisk','Laks','Sild','Reker']]
+};
+var CATS=Object.keys(BANK);
+var LETT=['A','B','C','D'];
+var OWN_KEY='fq-egne';
+
+/* ===== Hjelpere ===== */
+var app=document.getElementById('app');
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}return a}
+function lsGet(k,d){try{var v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+function loadOwn(){try{return JSON.parse(lsGet(OWN_KEY,'[]'))||[]}catch(e){return[]}}
+function mkQ(text,right,wrongs,img){
+  var opts=shuffle([right].concat(wrongs));
+  return {text:text,opts:opts,correct:opts.indexOf(right),img:img||null};
+}
+window.onerror=function(m,u,l){var b=$('#errBox');b.style.display='block';b.textContent='Feil: '+m+' (linje '+l+')'};
+
+/* ===== Tilstand ===== */
+var view='home';
+var S={cats:null,own:true,count:10,secs:20};
+var H={peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
+var P={peer:null,conn:null,name:'',code:'',st:null,end:0,chosen:null,joined:false,leaving:false,gen:0,tick:null,status:''};
+
+function go(v){view=v;render()}
+function render(){
+  var h='';
+  if(view==='home')h=vHome();
+  else if(view==='editor')h=vEditor();
+  else if(view==='setup')h=vSetup();
+  else if(view==='host')h=vHost();
+  else if(view==='player')h=vPlayer();
+  app.innerHTML=h;
+  window.scrollTo(0,0);
+}
+
+/* ===== Hjem ===== */
+function vHome(){
+  var kode=(location.search.match(/kode=(\d+)/)||[])[1]||'';
+  var n=loadOwn().length;
+  return '<div class="wrap"><h1>🎉 Familiequizz</h1><p class="sub">Quiz for venner og familie</p>'+
+  '<div class="card"><h2>Bli med i en quiz</h2>'+
+  '<input id="jcode" type="tel" inputmode="numeric" maxlength="4" placeholder="Kode (4 siffer)" value="'+esc(kode)+'">'+
+  '<input id="jname" type="text" maxlength="14" placeholder="Ditt navn" value="'+esc(lsGet('fq-navn',''))+'">'+
+  '<button class="btn" data-a="join">Bli med</button></div>'+
+  '<div class="card"><h2>Vær vert</h2><button class="btn" data-a="new">Start ny quiz</button>'+
+  '<button class="btn ghost" data-a="own">Våre egne spørsmål ('+n+')</button></div>'+
+  '<p class="note">Verten må la appen stå åpen under hele quizen.</p></div>';
+}
+
+/* ===== Egne spørsmål ===== */
+function vEditor(){
+  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Egne spørsmål</span><span></span></div>';
+  h+='<div class="card"><h2>Nytt spørsmål</h2>'+
+  '<textarea id="eq" rows="2" placeholder="Spørsmålet, f.eks. Hvem er dette på bildet?"></textarea>'+
+  '<input id="er" type="text" placeholder="Riktig svar">'+
+  '<input id="ew1" type="text" placeholder="Feil svar 1">'+
+  '<input id="ew2" type="text" placeholder="Feil svar 2 (valgfritt)">'+
+  '<input id="ew3" type="text" placeholder="Feil svar 3 (valgfritt)">'+
+  '<label class="note" style="display:block;text-align:left">Bilde (valgfritt)</label><input id="eimg" type="file" accept="image/*">'+
+  '<button class="btn" data-a="saveq">Lagre spørsmål</button></div>';
+  h+='<div class="card"><h2>Lagrede ('+own.length+')</h2>';
+  if(!own.length)h+='<p class="note">Ingen ennå.</p>';
+  for(var i=0;i<own.length;i++){
+    h+='<div class="qrow">'+(own[i].img?'<img src="'+own[i].img+'" alt="">':'')+'<span>'+esc(own[i].t)+'<br><small>✓ '+esc(own[i].c)+'</small></span><button class="x" data-a="delq" data-i="'+i+'">Slett</button></div>';
+  }
+  return h+'<p class="note">Spørsmålene lagres på denne telefonen.</p></div>';
+}
+function shrink(file,cb){
+  var url=URL.createObjectURL(file),im=new Image();
+  im.onload=function(){
+    var m=560,w=im.width,hh=im.height,s=Math.min(1,m/Math.max(w,hh));
+    var c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(hh*s);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    URL.revokeObjectURL(url);cb(c.toDataURL('image/jpeg',0.6));
+  };
+  im.onerror=function(){cb(null)};
+  im.src=url;
+}
+function saveQ(){
+  var t=$('#eq').value.trim(),c=$('#er').value.trim(),w=[];
+  ['#ew1','#ew2','#ew3'].forEach(function(s){var v=$(s).value.trim();if(v)w.push(v)});
+  if(!t||!c||!w.length){alert('Skriv spørsmål, riktig svar og minst ett feil svar.');return}
+  var f=$('#eimg').files[0];
+  function done(img){
+    var own=loadOwn();own.push({t:t,c:c,w:w,img:img||null});
+    if(!lsSet(OWN_KEY,JSON.stringify(own))){alert('Fikk ikke lagret (for lite plass?). Prøv et mindre bilde.');return}
+    render();
+  }
+  if(f)shrink(f,done);else done(null);
+}
+
+/* ===== Oppsett ===== */
+function vSetup(){
+  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Ny quiz</span><span></span></div><div class="card"><h2>Kategorier</h2>';
+  for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'" checked> '+esc(CATS[i])+'</label>';
+  h+='<label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Våre egne spørsmål ('+own.length+')</label></div>';
+  h+='<div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[5,10,15,20].map(function(n){return '<option'+(n===10?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
+  '<div><h2>Sekunder</h2><select id="ssecs">'+[10,15,20,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div></div></div>'+
+  '<button class="btn" data-a="open" id="openbtn">Åpne rom</button></div>';
+  return h;
+}
+function buildQs(cfg){
+  var own=cfg.own?shuffle(loadOwn()).slice(0,cfg.count):[];
+  var pool=[];
+  cfg.cats.forEach(function(c){BANK[c].forEach(function(r){pool.push(r)})});
+  pool=shuffle(pool).slice(0,Math.max(0,cfg.count-own.length));
+  var qs=[];
+  own.forEach(function(o){qs.push(mkQ(o.t,o.c,o.w,o.img))});
+  pool.forEach(function(r){qs.push(mkQ(r[0],r[1],r.slice(2)))});
+  return shuffle(qs);
+}
+
+/* ===== Vert ===== */
+function startHost(){
+  if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
+  var cats=[];
+  for(var i=0;i<CATS.length;i++)if($('#c'+i).checked)cats.push(CATS[i]);
+  var own=$('#cown').checked&&!$('#cown').disabled;
+  H.cfg={cats:cats,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10)};
+  H.qs=buildQs(H.cfg);
+  if(!H.qs.length){alert('Velg minst én kategori.');return}
+  H.players={};
+  $('#openbtn').disabled=true;$('#openbtn').textContent='Åpner rom…';
+  openRoom(0);
+}
+function openRoom(tries){
+  var code=String(1000+Math.floor(Math.random()*9000));
+  var p=new Peer('familiequizz-'+code);
+  p.on('open',function(){
+    H.peer=p;H.code=code;H.phase='lobby';H.qi=-1;
+    try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){H.lock=l},function(){})}catch(e){}
+    go('host');
+  });
+  p.on('error',function(err){
+    if(err.type==='unavailable-id'&&tries<5){try{p.destroy()}catch(e){}openRoom(tries+1)}
+    else if(!H.peer){alert('Kunne ikke åpne rom ('+err.type+'). Sjekk nettet.');go('setup')}
+  });
+  p.on('connection',function(conn){
+    conn.on('data',function(m){hostMsg(conn,m)});
+    conn.on('close',function(){hostDrop(conn)});
+    conn.on('error',function(){hostDrop(conn)});
+  });
+  p.on('disconnected',function(){try{p.reconnect()}catch(e){}});
+}
+function ranked(){var a=[];for(var k in H.players)a.push(H.players[k]);a.sort(function(x,y){return y.score-x.score||(x.name<y.name?-1:1)});return a}
+function onlineList(){return ranked().filter(function(p){return p.online})}
+function allAnswered(){var o=onlineList();if(!o.length)return false;return o.every(function(p){return !!p.ans})}
+function answeredCount(){var n=0,o=onlineList();o.forEach(function(p){if(p.ans)n++});return n+' av '+o.length+' har svart'}
+function hostMsg(conn,m){
+  if(!m)return;
+  if(m.t==='join'){
+    var name=String(m.name||'').trim().slice(0,14);
+    if(!name){conn.send({t:'err',m:'Skriv et navn.'});return}
+    var p=H.players[name];
+    if(p&&p.online&&p.conn!==conn){conn.send({t:'err',m:'Navnet er allerede i bruk.'});return}
+    if(!p)p=H.players[name]={name:name,score:0,ans:null,last:null};
+    p.conn=conn;p.online=true;conn._name=name;
+    conn.send({t:'joined',name:name});
+    sendTo(p);refreshHost();
+  }else if(m.t==='ans'){
+    var pl=H.players[conn._name];
+    if(!pl||H.phase!=='q'||pl.ans)return;
+    var c=m.c|0,q=H.qs[H.qi],left=Math.max(0,H.endsAt-Date.now()),ok=c===q.correct;
+    pl.ans={c:c,ok:ok,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
+    conn.send({t:'a',c:c});
+    refreshHost();
+    if(allAnswered())hostReveal();
+  }
+}
+function hostDrop(conn){
+  var p=H.players[conn._name];
+  if(p&&p.conn===conn){p.online=false;refreshHost();if(H.phase==='q'&&allAnswered())hostReveal()}
+}
+function stateFor(p){
+  var q=H.qs[H.qi],r=ranked();
+  function top(n){return r.slice(0,n).map(function(x){return {name:x.name,score:x.score}})}
+  if(H.phase==='lobby')return {t:'s',ph:'lobby',n:r.length};
+  if(H.phase==='q')return {t:'s',ph:'q',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
+  if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
+    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,you:{c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
+  return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
+}
+function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
+function broadcast(){for(var k in H.players)sendTo(H.players[k])}
+function refreshHost(){
+  if(view!=='host')return;
+  if(H.phase==='q'){var e=$('#cnt');if(e)e.textContent=answeredCount()}else render();
+}
+function hostNext(){
+  if(H.timer){clearInterval(H.timer);H.timer=null}
+  if(H.qi+1>=H.qs.length){H.phase='end'}
+  else{
+    H.qi++;H.phase='q';H.endsAt=Date.now()+H.cfg.secs*1000;
+    for(var k in H.players)H.players[k].ans=null;
+    H.timer=setInterval(function(){
+      var l=Math.max(0,H.endsAt-Date.now()),e=$('#cd');
+      if(e)e.textContent=Math.ceil(l/1000);
+      if(l<=0)hostReveal();
+    },250);
+  }
+  broadcast();render();
+}
+function hostReveal(){
+  if(H.phase!=='q')return;
+  if(H.timer){clearInterval(H.timer);H.timer=null}
+  H.phase='reveal';H.counts=[0,0,0,0];
+  for(var k in H.players){
+    var p=H.players[k];
+    p.last=p.ans||{c:null,ok:false,gain:0};
+    p.score+=p.last.gain;
+    if(p.last.c!=null&&p.last.c>=0&&p.last.c<4)H.counts[p.last.c]++;
+  }
+  broadcast();render();
+}
+function hostAgain(){
+  for(var k in H.players){H.players[k].score=0;H.players[k].ans=null;H.players[k].last=null}
+  H.qs=buildQs(H.cfg);H.qi=-1;H.phase='lobby';broadcast();render();
+}
+function hostClose(){
+  if(H.timer){clearInterval(H.timer);H.timer=null}
+  try{if(H.peer)H.peer.destroy()}catch(e){}
+  try{if(H.lock)H.lock.release()}catch(e){}
+  H.peer=null;H.players={};H.phase='lobby';go('home');
+}
+function optsHtml(q,mode){
+  var h='<div class="opts">';
+  for(var i=0;i<q.opts.length;i++){
+    var cls='opt o'+i;
+    if(mode==='reveal')cls+=(i===q.correct?' right':' dim');
+    h+='<div class="'+cls+'"><b>'+LETT[i]+'</b><span>'+esc(q.opts[i])+'</span>'+(mode==='reveal'?'<em class="cnt" style="font-style:normal">'+H.counts[i]+'</em>':'')+'</div>';
+  }
+  return h+'</div>';
+}
+function scoreRows(list,max){
+  var h='',medal=['🥇','🥈','🥉'];
+  list.slice(0,max).forEach(function(p,i){h+='<div class="score"><span>'+(medal[i]||(i+1)+'.')+' '+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
+  return h||'<p class="note">Ingen spillere.</p>';
+}
+function vHost(){
+  var q=H.qs[H.qi],r=ranked(),h='<div class="wrap">';
+  if(H.phase==='lobby'){
+    var url=location.href.split('?')[0].split('#')[0];
+    h+='<div class="small">Åpne denne siden på mobilen</div><div class="url">'+esc(url)+'</div>'+
+    '<div class="small">og skriv inn koden</div><div class="code">'+H.code+'</div>'+
+    '<button class="btn ghost" data-a="share">Del lenke med kode</button>'+
+    '<div class="chips">'+(r.length?r.map(function(p){return '<span class="chip'+(p.online?'':' off')+'">'+esc(p.name)+'</span>'}).join(''):'<span class="note">Venter på spillere…</span>')+'</div>'+
+    '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
+    '<button class="btn red" data-a="close">Avslutt</button>';
+  }else if(H.phase==='q'){
+    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
+    '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
+    '<p class="small" id="cnt">'+answeredCount()+'</p><button class="btn ghost" data-a="skip">Vis fasit nå</button>';
+  }else if(H.phase==='reveal'){
+    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
+    '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+
+    '<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>'+
+    '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>';
+  }else{
+    h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
+    '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
+  }
+  return h+'</div>';
+}
+
+/* ===== Spiller ===== */
+function doJoin(){
+  var code=$('#jcode').value.trim(),name=$('#jname').value.trim();
+  if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
+  if(!/^\d{4}$/.test(code)){alert('Koden har 4 siffer.');return}
+  if(!name){alert('Skriv navnet ditt.');return}
+  lsSet('fq-navn',name);
+  P.code=code;P.name=name;P.st=null;P.chosen=null;P.joined=false;P.leaving=false;P.status='Kobler til…';
+  view='player';render();
+  connectPlayer();
+}
+function stopPlayer(){
+  P.gen++;
+  if(P.tick){clearInterval(P.tick);P.tick=null}
+  try{if(P.conn)P.conn.close()}catch(e){}
+  try{if(P.peer)P.peer.destroy()}catch(e){}
+  P.conn=null;P.peer=null;
+}
+function leavePlayer(msg){
+  P.leaving=true;stopPlayer();
+  if(msg)alert(msg);
+  go('home');
+}
+function connectPlayer(){
+  if(P.leaving)return;
+  stopPlayer();
+  var gen=P.gen,done=false,timeout;
+  function bad(msg){
+    if(done||gen!==P.gen||P.leaving)return;done=true;clearTimeout(timeout);
+    if(!P.joined){leavePlayer(msg)}
+    else{P.status='Mistet forbindelsen – prøver igjen…';P.st=P.st;render();setTimeout(connectPlayer,3000)}
+  }
+  var peer=new Peer();P.peer=peer;
+  timeout=setTimeout(function(){bad('Fant ikke rommet. Sjekk koden, og at verten har appen åpen.')},12000);
+  peer.on('error',function(e){bad(e.type==='peer-unavailable'?'Fant ikke rommet. Sjekk koden, og at verten har appen åpen.':'Tilkoblingsfeil ('+e.type+').')});
+  peer.on('open',function(){
+    var c=peer.connect('familiequizz-'+P.code,{reliable:true});P.conn=c;
+    c.on('open',function(){clearTimeout(timeout);c.send({t:'join',name:P.name})});
+    c.on('data',function(m){if(gen===P.gen)playerMsg(m)});
+    c.on('close',function(){bad('Mistet forbindelsen.')});
+    c.on('error',function(){bad('Tilkoblingsfeil.')});
+  });
+}
+function playerMsg(m){
+  if(!m)return;
+  if(m.t==='err'){leavePlayer(m.m);return}
+  if(m.t==='joined'){P.joined=true;P.status='';return}
+  if(m.t==='a'){P.chosen=m.c;render();return}
+  if(m.t==='s'){
+    P.st=m;P.status='';
+    if(m.ph==='q'){
+      P.end=Date.now()+m.left;P.chosen=m.ans;
+      if(P.tick)clearInterval(P.tick);
+      P.tick=setInterval(function(){
+        var e=$('#pcd');if(e)e.textContent=Math.ceil(Math.max(0,P.end-Date.now())/1000);
+      },250);
+    }else if(P.tick){clearInterval(P.tick);P.tick=null}
+    render();
+  }
+}
+function playerAnswer(i){
+  if(P.chosen!=null||!P.st||P.st.ph!=='q')return;
+  P.chosen=i;
+  try{P.conn.send({t:'ans',c:i})}catch(e){}
+  render();
+}
+function vPlayer(){
+  var s=P.st,h='<div class="wrap">';
+  if(P.status)h+='<p class="note">'+esc(P.status)+'</p>';
+  if(!s||s.ph==='lobby'){
+    h+='<h1>Hei, '+esc(P.name)+'!</h1><p class="sub">'+(s?'Du er med. Venter på at verten starter quizen…':'Kobler til…')+'</p>'+
+    (s?'<p class="note">'+s.n+' spiller'+(s.n===1?'':'e')+' i rommet</p>':'');
+  }else if(s.ph==='q'){
+    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+Math.ceil(Math.max(0,P.end-Date.now())/1000)+'</span></div>'+
+    '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'')+'<div class="opts">';
+    for(var i=0;i<s.opts.length;i++){
+      h+='<button class="opt o'+i+(P.chosen===i?' mine':(P.chosen!=null?' dim':''))+'" data-a="ans" data-i="'+i+'"'+(P.chosen!=null?' disabled':'')+'><b>'+LETT[i]+'</b><span>'+esc(s.opts[i])+'</span></button>';
+    }
+    h+='</div>'+(P.chosen!=null?'<p class="big" style="font-size:22px">Svar sendt ✓</p><p class="note">Venter på de andre…</p>':'');
+  }else if(s.ph==='reveal'){
+    var y=s.you;
+    h+='<div class="big '+(y.ok?'ok':'no')+'">'+(y.c==null?'⏱ Ikke svart':(y.ok?'✓ Riktig!':'✗ Feil'))+'</div>'+
+    '<p class="sub" style="font-size:22px">'+(y.gain?'+'+y.gain+' poeng':'0 poeng')+'</p>'+
+    '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+LETT[s.correct]+'. '+esc(s.opts[s.correct])+'</div></div>'+
+    '<div class="card"><h2>Du er nr. '+y.rank+' med '+y.score+' poeng</h2>'+scoreRows(s.top,5)+'</div>'+
+    '<p class="note">Venter på neste spørsmål…</p>';
+  }else{
+    h+='<h1>'+(s.you.rank===1?'🏆 Du vant!':'Ferdig!')+'</h1><p class="sub">Du ble nr. '+s.you.rank+' med '+s.you.score+' poeng</p>'+
+    '<div class="card">'+scoreRows(s.top,50)+'</div>';
+  }
+  return h+'<button class="btn ghost" data-a="leave" style="margin-top:20px">Forlat quizen</button></div>';
+}
+
+/* ===== Klikk ===== */
+app.addEventListener('click',function(e){
+  var b=e.target.closest('[data-a]');if(!b||b.disabled)return;
+  var a=b.getAttribute('data-a'),i=parseInt(b.getAttribute('data-i'),10);
+  if(a==='join')doJoin();
+  else if(a==='new')go('setup');
+  else if(a==='own')go('editor');
+  else if(a==='home')go('home');
+  else if(a==='saveq')saveQ();
+  else if(a==='delq'){var o=loadOwn();o.splice(i,1);lsSet(OWN_KEY,JSON.stringify(o));render()}
+  else if(a==='open')startHost();
+  else if(a==='start')hostNext();
+  else if(a==='skip')hostReveal();
+  else if(a==='next')hostNext();
+  else if(a==='again')hostAgain();
+  else if(a==='close'){if(confirm('Avslutte quizen for alle?'))hostClose()}
+  else if(a==='share'){
+    var u=location.href.split('?')[0].split('#')[0]+'?kode='+H.code;
+    if(navigator.share)navigator.share({title:'Familiequizz',text:'Bli med i quizen! Kode: '+H.code,url:u}).catch(function(){});
+    else prompt('Kopier lenken:',u);
+  }
+  else if(a==='ans')playerAnswer(i);
+  else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
+});
+
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
+render();
+</script>
+</body>
+</html>
