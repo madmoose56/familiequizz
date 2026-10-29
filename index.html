@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Familiequizz</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="temaer.js"></script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;min-height:100%}
@@ -57,6 +58,9 @@ label.chk input{width:22px;height:22px}
 .qrow span{flex:1}
 .qrow img{width:40px;height:40px;object-fit:cover;border-radius:8px}
 .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;padding:8px 12px;font-size:16px}
+.sec{font-size:13px;text-transform:uppercase;letter-spacing:1px;opacity:.7;margin:12px 0 2px}
+.cols{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:900px){.wrap{max-width:1000px}.qimg{max-height:46vh}.cols{grid-template-columns:1fr 1fr}}
 #errBox{display:none;position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;padding:10px;font-size:13px;z-index:9}
 </style>
 </head>
@@ -172,22 +176,24 @@ function vHome(){
 }
 
 /* ===== Egne spørsmål ===== */
+var editIdx=-1,backTo='home';
 function vEditor(){
-  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Egne spørsmål</span><span></span></div>';
-  h+='<div class="card"><h2>Nytt spørsmål</h2>'+
-  '<textarea id="eq" rows="2" placeholder="Spørsmålet, f.eks. Hvem er dette på bildet?"></textarea>'+
-  '<input id="er" type="text" placeholder="Riktig svar">'+
-  '<input id="ew1" type="text" placeholder="Feil svar 1">'+
-  '<input id="ew2" type="text" placeholder="Feil svar 2 (valgfritt)">'+
-  '<input id="ew3" type="text" placeholder="Feil svar 3 (valgfritt)">'+
-  '<label class="note" style="display:block;text-align:left">Bilde (valgfritt)</label><input id="eimg" type="file" accept="image/*">'+
-  '<button class="btn" data-a="saveq">Lagre spørsmål</button></div>';
+  var own=loadOwn(),e=editIdx>=0?own[editIdx]:null,w=e?e.w:[];
+  var h='<div class="wrap"><div class="top"><button class="x" data-a="back">‹ Tilbake</button><span>Egne spørsmål</span><span></span></div><div class="cols">';
+  h+='<div class="card"><h2>'+(e?'Rediger spørsmål':'Nytt spørsmål')+'</h2>'+
+  '<textarea id="eq" rows="2" placeholder="Spørsmålet, f.eks. Hvem er dette på bildet?">'+esc(e?e.t:'')+'</textarea>'+
+  '<input id="er" type="text" placeholder="Riktig svar" value="'+esc(e?e.c:'')+'">'+
+  '<input id="ew1" type="text" placeholder="Feil svar 1" value="'+esc(w[0]||'')+'">'+
+  '<input id="ew2" type="text" placeholder="Feil svar 2 (valgfritt)" value="'+esc(w[1]||'')+'">'+
+  '<input id="ew3" type="text" placeholder="Feil svar 3 (valgfritt)" value="'+esc(w[2]||'')+'">'+
+  '<label class="note" style="display:block;text-align:left">Bilde (valgfritt)'+(e&&e.img?' – har bilde fra før, velg nytt for å bytte':'')+'</label><input id="eimg" type="file" accept="image/*">'+
+  '<button class="btn" data-a="saveq">'+(e?'Lagre endringer':'Lagre spørsmål')+'</button>'+(e?'<button class="btn ghost" data-a="cancelq">Avbryt</button>':'')+'</div>';
   h+='<div class="card"><h2>Lagrede ('+own.length+')</h2>';
   if(!own.length)h+='<p class="note">Ingen ennå.</p>';
   for(var i=0;i<own.length;i++){
-    h+='<div class="qrow">'+(own[i].img?'<img src="'+own[i].img+'" alt="">':'')+'<span>'+esc(own[i].t)+'<br><small>✓ '+esc(own[i].c)+'</small></span><button class="x" data-a="delq" data-i="'+i+'">Slett</button></div>';
+    h+='<div class="qrow">'+(own[i].img?'<img src="'+own[i].img+'" alt="">':'')+'<span>'+esc(own[i].t)+'<br><small>✓ '+esc(own[i].c)+'</small></span><button class="x" data-a="editq" data-i="'+i+'">Rediger</button><button class="x" data-a="delq" data-i="'+i+'">Slett</button></div>';
   }
-  return h+'<p class="note">Spørsmålene lagres på denne telefonen.</p></div>';
+  return h+'</div><p class="note">Spørsmålene lagres i nettleseren på denne enheten.</p></div></div>';
 }
 function shrink(file,cb){
   var url=URL.createObjectURL(file),im=new Image();
@@ -206,43 +212,69 @@ function saveQ(){
   if(!t||!c||!w.length){alert('Skriv spørsmål, riktig svar og minst ett feil svar.');return}
   var f=$('#eimg').files[0];
   function done(img){
-    var own=loadOwn();own.push({t:t,c:c,w:w,img:img||null});
+    var own=loadOwn();
+    if(editIdx>=0&&own[editIdx]){own[editIdx]={t:t,c:c,w:w,img:img||own[editIdx].img||null}}
+    else own.push({t:t,c:c,w:w,img:img||null});
     if(!lsSet(OWN_KEY,JSON.stringify(own))){alert('Fikk ikke lagret (for lite plass?). Prøv et mindre bilde.');return}
-    render();
+    editIdx=-1;render();
   }
   if(f)shrink(f,done);else done(null);
 }
 
 /* ===== Oppsett ===== */
+var THEMES=[['skuespillere','Skuespillere (bilde) – vestlige, født etter 1960'],['byer','Byer (bilde av kjent landemerke)']];
+function themeQs(id){
+  var out=[],T=window.TEMAER;
+  if(!T)return out;
+  if(id==='skuespillere'){
+    T.skuespillere.forEach(function(a){
+      var w=shuffle(T.skuespillere.filter(function(b){return b.g===a.g&&b!==a})).slice(0,3).map(function(b){return b.n});
+      var q=mkQ('Hvem er skuespilleren på bildet?',a.n,w,a.img);q.info='Født '+a.y;out.push(q);
+    });
+  }else if(id==='byer'){
+    T.byer.forEach(function(a){
+      var w=shuffle(T.byer.filter(function(b){return b!==a})).slice(0,3).map(function(b){return b.c});
+      var q=mkQ('Hvilken by ligger dette landemerket i?',a.c,w,a.img);q.info=a.l;out.push(q);
+    });
+  }
+  return out;
+}
 function vSetup(){
-  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Ny quiz</span><span></span></div><div class="card"><h2>Kategorier</h2>';
-  for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'" checked> '+esc(CATS[i])+'</label>';
-  h+='<label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Våre egne spørsmål ('+own.length+')</label></div>';
-  h+='<div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[5,10,15,20].map(function(n){return '<option'+(n===10?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
-  '<div><h2>Sekunder</h2><select id="ssecs">'+[10,15,20,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div></div></div>'+
-  '<button class="btn" data-a="open" id="openbtn">Åpne rom</button></div>';
+  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Admin – ny quiz</span><span></span></div>';
+  h+='<div class="cols"><div class="card"><h2>Temaer</h2><div class="sec">Med bilde</div>';
+  THEMES.forEach(function(t,i){h+='<label class="chk"><input type="checkbox" id="t'+i+'" checked> '+esc(t[1])+'</label>'});
+  h+='<div class="sec">Våre egne</div><label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Egne spørsmål ('+own.length+')</label>'+
+  '<button class="btn ghost" data-a="own">Legg inn / rediger egne spørsmål</button>'+
+  '<div class="sec">Vanlige kategorier</div>';
+  for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
+  h+='</div><div><div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[10,15,20,25,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
+  '<div><h2>Sekunder</h2><select id="ssecs">'+[10,15,20,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div></div>'+
+  '<p class="note">Spørsmålene fordeles jevnt mellom temaene du velger.</p></div>'+
+  '<button class="btn" data-a="open" id="openbtn">Åpne rom</button></div></div></div>';
   return h;
 }
 function buildQs(cfg){
-  var own=cfg.own?shuffle(loadOwn()).slice(0,cfg.count):[];
-  var pool=[];
-  cfg.cats.forEach(function(c){BANK[c].forEach(function(r){pool.push(r)})});
-  pool=shuffle(pool).slice(0,Math.max(0,cfg.count-own.length));
+  var lists=[];
+  (cfg.themes||[]).forEach(function(t){lists.push(shuffle(themeQs(t)))});
+  if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){return mkQ(o.t,o.c,o.w,o.img)}));
+  cfg.cats.forEach(function(c){lists.push(shuffle(BANK[c]).map(function(r){return mkQ(r[0],r[1],r.slice(2))}))});
   var qs=[];
-  own.forEach(function(o){qs.push(mkQ(o.t,o.c,o.w,o.img))});
-  pool.forEach(function(r){qs.push(mkQ(r[0],r[1],r.slice(2)))});
+  while(qs.length<cfg.count&&lists.some(function(l){return l.length})){
+    lists.forEach(function(l){if(l.length&&qs.length<cfg.count)qs.push(l.shift())});
+  }
   return shuffle(qs);
 }
 
 /* ===== Vert ===== */
 function startHost(){
   if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
-  var cats=[];
+  var cats=[],themes=[];
   for(var i=0;i<CATS.length;i++)if($('#c'+i).checked)cats.push(CATS[i]);
+  THEMES.forEach(function(t,i){if($('#t'+i).checked)themes.push(t[0])});
   var own=$('#cown').checked&&!$('#cown').disabled;
-  H.cfg={cats:cats,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10)};
+  H.cfg={cats:cats,themes:themes,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10)};
   H.qs=buildQs(H.cfg);
-  if(!H.qs.length){alert('Velg minst én kategori.');return}
+  if(!H.qs.length){alert('Velg minst ett tema.');return}
   H.players={};
   $('#openbtn').disabled=true;$('#openbtn').textContent='Åpner rom…';
   openRoom(0);
@@ -301,7 +333,7 @@ function stateFor(p){
   if(H.phase==='lobby')return {t:'s',ph:'lobby',n:r.length};
   if(H.phase==='q')return {t:'s',ph:'q',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
   if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
-    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,you:{c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
+    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
@@ -376,7 +408,7 @@ function vHost(){
     '<p class="small" id="cnt">'+answeredCount()+'</p><button class="btn ghost" data-a="skip">Vis fasit nå</button>';
   }else if(H.phase==='reveal'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
-    '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+
+    '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
     '<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>'+
     '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>';
   }else{
@@ -469,7 +501,7 @@ function vPlayer(){
     var y=s.you;
     h+='<div class="big '+(y.ok?'ok':'no')+'">'+(y.c==null?'⏱ Ikke svart':(y.ok?'✓ Riktig!':'✗ Feil'))+'</div>'+
     '<p class="sub" style="font-size:22px">'+(y.gain?'+'+y.gain+' poeng':'0 poeng')+'</p>'+
-    '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+LETT[s.correct]+'. '+esc(s.opts[s.correct])+'</div></div>'+
+    '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+LETT[s.correct]+'. '+esc(s.opts[s.correct])+'</div>'+(s.info?'<p class="note" style="margin:4px 0 0">'+esc(s.info)+'</p>':'')+'</div>'+
     '<div class="card"><h2>Du er nr. '+y.rank+' med '+y.score+' poeng</h2>'+scoreRows(s.top,5)+'</div>'+
     '<p class="note">Venter på neste spørsmål…</p>';
   }else{
@@ -485,10 +517,13 @@ app.addEventListener('click',function(e){
   var a=b.getAttribute('data-a'),i=parseInt(b.getAttribute('data-i'),10);
   if(a==='join')doJoin();
   else if(a==='new')go('setup');
-  else if(a==='own')go('editor');
+  else if(a==='own'){backTo=view;editIdx=-1;go('editor')}
+  else if(a==='back')go(backTo)
+  else if(a==='editq'){editIdx=i;render()}
+  else if(a==='cancelq'){editIdx=-1;render()}
   else if(a==='home')go('home');
   else if(a==='saveq')saveQ();
-  else if(a==='delq'){var o=loadOwn();o.splice(i,1);lsSet(OWN_KEY,JSON.stringify(o));render()}
+  else if(a==='delq'){if(confirm('Slette spørsmålet?')){var o=loadOwn();o.splice(i,1);lsSet(OWN_KEY,JSON.stringify(o));editIdx=-1;render()}}
   else if(a==='open')startHost();
   else if(a==='start')hostNext();
   else if(a==='skip')hostReveal();
