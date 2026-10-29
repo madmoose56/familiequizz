@@ -255,7 +255,7 @@ function vThemes(){
   var ts=loadThemes();
   h+='<div class="card"><h2>Mine temaer ('+ts.length+')</h2>';
   if(!ts.length)h+='<p class="note">Ingen ennå.</p>';
-  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span><button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
+  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span>'+(t.filters?'<button class="x" data-a="rerun" data-i="'+i+'">Kjør søket på nytt</button>':'')+'<button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
   return h+'</div></div></div></div>';
 }
 function renderRes(){
@@ -264,7 +264,10 @@ function renderRes(){
   if(!TR.items.length){el.innerHTML='<p class="note">Ingen treff. Prøv å senke «Hvor kjente» eller utvide årene.</p>';return}
   var h='<p class="note" style="text-align:left">Fjern treff med dårlig bilde eller feil person med ✕.</p><div class="grid">';
   TR.items.forEach(function(it,i){h+='<div class="gi"><img src="'+esc(it.img)+'" alt=""><span>'+esc(it.n)+(it.y?'<br><small>f. '+it.y+'</small>':'')+'</span><button class="x" data-a="rmres" data-i="'+i+'">✕</button></div>'});
-  el.innerHTML=h+'</div><input id="tname" type="text" placeholder="Navn på temaet" value="'+esc(TR.suggest)+'"><button class="btn" data-a="savetheme">Lagre som tema ('+TR.items.length+')</button>';
+  var rep=false;loadThemes().forEach(function(t){if(t.id===TR.replaceId)rep=true});
+  el.innerHTML=h+'</div><input id="tname" type="text" placeholder="Navn på temaet" value="'+esc(TR.suggest)+'">'+
+  (rep?'<button class="btn" data-a="savetheme">Oppdater temaet ('+TR.items.length+')</button><button class="btn ghost" data-a="savenew">Lagre som nytt tema</button>'
+      :'<button class="btn" data-a="savetheme">Lagre som tema ('+TR.items.length+')</button>');
 }
 function wdVals(a){return a.map(function(x){return 'wd:'+x}).join(' ')}
 function wdQuery(q,ms){
@@ -291,6 +294,7 @@ function runSearch(){
     (cc?'?x wdt:P17 wd:'+cc+'. ':'')+'?x wdt:P31 ?t; wdt:P18 ?img; wikibase:sitelinks ?sl. FILTER(?sl>='+fame+')} ORDER BY DESC(?sl) LIMIT '+(lim*2)+
     ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
   }
+  var F={type:type,occ:$('#tocc').value,gen:g,from:from,to:to,cty:$('#tcty').value,fame:$('#tfame').value,max:$('#tmax').value};
   var btn=$('#sbtn'),st=$('#tstat'),rows=[],fails=0,done=0,idx=0;
   btn.disabled=true;st.textContent='Søker … (kan ta opptil ett minutt)';
   function finish(){
@@ -304,7 +308,7 @@ function runSearch(){
       if(type==='p'){it.y=parseInt(b.dob.value,10);it.g=/Q6581072$/.test(b.g.value)?'f':(/Q6581097$/.test(b.g.value)?'m':'x')}
       items.push(it);
     });
-    TR.items=items;TR.type=type;
+    TR.items=items;TR.type=type;TR.filters=F;
     var s=$('#tstat');
     if(s)s.textContent=items.length+' treff funnet.'+(fails?' ('+fails+' av '+groups.length+' søk fikk tidsavbrudd – prøv igjen for flere treff.)':'');
     var b2=$('#sbtn');if(b2)b2.disabled=false;
@@ -321,13 +325,24 @@ function runSearch(){
   }
   for(var k=0;k<Math.min(4,groups.length);k++)next();
 }
-function saveTheme(){
+function rerunTheme(i){
+  var t=loadThemes()[i];if(!t||!t.filters)return;
+  var f=t.filters,set=function(id,v){var e=$(id);if(e&&v!=null)e.value=v};
+  set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
+  set('#tocc',f.occ);set('#tgen',f.gen);set('#tfrom',f.from);set('#tto',f.to);set('#tcty',f.cty);set('#tfame',f.fame);set('#tmax',f.max);
+  TR.replaceId=t.id;TR.suggest=t.name;
+  window.scrollTo(0,0);runSearch();
+}
+function saveTheme(asNew){
   var name=$('#tname').value.trim();
   if(!name){alert('Gi temaet et navn.');return}
   if(TR.items.length<4){alert('Et tema trenger minst 4 treff.');return}
-  var ts=loadThemes();ts.push({id:String(Date.now()),name:name,type:TR.type,items:TR.items});
+  var ts=loadThemes(),rep=asNew?null:TR.replaceId,hit=null;
+  ts.forEach(function(t){if(t.id===rep)hit=t});
+  if(hit){hit.items=TR.items;hit.filters=TR.filters;hit.name=name}
+  else ts.push({id:String(Date.now()),name:name,type:TR.type,items:TR.items,filters:TR.filters});
   if(!lsSet('fq-temaer',JSON.stringify(ts))){alert('Fikk ikke lagret (for lite plass?).');return}
-  TR.items=[];TR.suggest='';render();
+  TR.items=[];TR.suggest='';TR.replaceId=null;render();
 }
 
 /* ===== Oppsett ===== */
@@ -654,7 +669,9 @@ app.addEventListener('click',function(e){
   else if(a==='own'){backTo=view;editIdx=-1;go('editor')}
   else if(a==='back')go(backTo)
   else if(a==='tab'){editIdx=-1;go(b.getAttribute('data-v'))}
-  else if(a==='search')runSearch();
+  else if(a==='search'){TR.replaceId=null;runSearch()}
+  else if(a==='rerun')rerunTheme(i);
+  else if(a==='savenew')saveTheme(true);
   else if(a==='rmres'){TR.items.splice(i,1);renderRes()}
   else if(a==='savetheme')saveTheme();
   else if(a==='deltheme'){if(confirm('Slette temaet?')){var ts=loadThemes();ts.splice(i,1);lsSet('fq-temaer',JSON.stringify(ts));render()}}
