@@ -255,7 +255,7 @@ function vThemes(){
   var ts=loadThemes();
   h+='<div class="card"><h2>Mine temaer ('+ts.length+')</h2>';
   if(!ts.length)h+='<p class="note">Ingen ennå.</p>';
-  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span>'+(t.filters?'<button class="x" data-a="rerun" data-i="'+i+'">Kjør søket på nytt</button>':'')+'<button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
+  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span>'+(t.filters?'<button class="x" data-a="edittheme" data-i="'+i+'">Rediger søk</button><button class="x" data-a="rerun" data-i="'+i+'">Kjør på nytt</button>':'')+'<button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
   return h+'</div></div></div></div>';
 }
 function renderRes(){
@@ -325,13 +325,15 @@ function runSearch(){
   }
   for(var k=0;k<Math.min(4,groups.length);k++)next();
 }
-function rerunTheme(i){
+function rerunTheme(i,noRun){
   var t=loadThemes()[i];if(!t||!t.filters)return;
   var f=t.filters,set=function(id,v){var e=$(id);if(e&&v!=null)e.value=v};
   set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
   set('#tocc',f.occ);set('#tgen',f.gen);set('#tfrom',f.from);set('#tto',f.to);set('#tcty',f.cty);set('#tfame',f.fame);set('#tmax',f.max);
   TR.replaceId=t.id;TR.suggest=t.name;
-  window.scrollTo(0,0);runSearch();
+  window.scrollTo(0,0);
+  if(noRun){var s=$('#tstat');if(s)s.textContent='Filtrene fra «'+t.name+'» er satt inn. Endre dem og trykk Søk. Du kan så lagre som nytt tema med nytt navn.';return}
+  runSearch();
 }
 function saveTheme(asNew){
   var name=$('#tname').value.trim();
@@ -668,8 +670,9 @@ app.addEventListener('click',function(e){
   else if(a==='new')go('setup');
   else if(a==='own'){backTo=view;editIdx=-1;go('editor')}
   else if(a==='back')go(backTo)
-  else if(a==='tab'){editIdx=-1;go(b.getAttribute('data-v'))}
-  else if(a==='search'){TR.replaceId=null;runSearch()}
+  else if(a==='tab'){editIdx=-1;TR.replaceId=null;TR.items=[];go(b.getAttribute('data-v'))}
+  else if(a==='search')runSearch();
+  else if(a==='edittheme')rerunTheme(i,true);
   else if(a==='rerun')rerunTheme(i);
   else if(a==='savenew')saveTheme(true);
   else if(a==='rmres'){TR.items.splice(i,1);renderRes()}
