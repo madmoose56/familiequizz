@@ -62,6 +62,14 @@ label.chk input{width:22px;height:22px}
 .cols{display:grid;grid-template-columns:1fr;gap:14px}
 @media(min-width:900px){.wrap{max-width:1000px}.qimg{max-height:46vh}.cols{grid-template-columns:1fr 1fr}}
 #refreshBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:8;width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:24px;line-height:1;padding:0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-right:50px}
+.tab{border:0;border-radius:10px;padding:10px 14px;font-size:16px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;font-family:inherit}
+.tab.on{background:#fde047;color:#3b0764}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px;max-height:55vh;overflow:auto}
+.gi{position:relative;background:rgba(255,255,255,.1);border-radius:10px;overflow:hidden;font-size:13px;text-align:center}
+.gi img{width:100%;height:110px;object-fit:cover;display:block}
+.gi span{display:block;padding:4px}
+.gi .x{position:absolute;top:4px;right:4px;padding:2px 8px}
 #errBox{display:none;position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;padding:10px;font-size:13px;z-index:9}
 </style>
 </head>
@@ -157,6 +165,7 @@ function render(){
   if(view==='home')h=vHome();
   else if(view==='editor')h=vEditor();
   else if(view==='setup')h=vSetup();
+  else if(view==='themes')h=vThemes();
   else if(view==='host')h=vHost();
   else if(view==='player')h=vPlayer();
   app.innerHTML=h;
@@ -183,7 +192,7 @@ function vHome(){
 var editIdx=-1,backTo='home';
 function vEditor(){
   var own=loadOwn(),e=editIdx>=0?own[editIdx]:null,w=e?e.w:[];
-  var h='<div class="wrap"><div class="top"><button class="x" data-a="back">‹ Tilbake</button><span>Egne spørsmål</span><span></span></div><div class="cols">';
+  var h='<div class="wrap">'+adminTabs('editor')+'<div class="cols">';
   h+='<div class="card"><h2>'+(e?'Rediger spørsmål':'Nytt spørsmål')+'</h2>'+
   '<textarea id="eq" rows="2" placeholder="Spørsmålet, f.eks. Hvem er dette på bildet?">'+esc(e?e.t:'')+'</textarea>'+
   '<input id="er" type="text" placeholder="Riktig svar" value="'+esc(e?e.c:'')+'">'+
@@ -225,10 +234,131 @@ function saveQ(){
   if(f)shrink(f,done);else done(null);
 }
 
+/* ===== Tema-bygger (Wikidata) ===== */
+var OCC=[['Skuespillere',['Q33999','Q10800557','Q10798782']],['Sangere',['Q177220']],['Musikere',['Q639669','Q177220']],['Regissører',['Q2526255']],['Fotballspillere',['Q937857']],['Forfattere',['Q36180']],['Politikere',['Q82955']],['Komikere',['Q245068']],['Malere',['Q1028181']]];
+var WEST=['Q30','Q145','Q16','Q408','Q27','Q183','Q142','Q38','Q29','Q20','Q34','Q35'];
+var CTRY=[['Alle land',[]],['Vestlige land (USA, Europa, Canada, Australia …)',WEST],['Norge',['Q20']],['Sverige',['Q34']],['Danmark',['Q35']],['Finland',['Q33']],['USA',['Q30']],['Storbritannia',['Q145']],['Irland',['Q27']],['Tyskland',['Q183']],['Frankrike',['Q142']],['Italia',['Q38']],['Spania',['Q29']],['Canada',['Q16']],['Australia',['Q408']]];
+var FAME=[['Veldig kjente',80],['Kjente',40],['Også mindre kjente',15]];
+var TR={items:[],type:'p',suggest:''};
+function selOpts(arr,def){return arr.map(function(x,i){return '<option value="'+i+'"'+(i===def?' selected':'')+'>'+esc(x[0])+'</option>'}).join('')}
+function vThemes(){
+  var h='<div class="wrap">'+adminTabs('themes')+'<div class="cols"><div class="card"><h2>Nytt tema – tilpass søket</h2>'+
+  '<div class="sec">Type</div><select id="ttype"><option value="p">Personer – «Hvem er dette?»</option><option value="l">Landemerker – «Hva heter dette?»</option></select>'+
+  '<div id="tpers"><div class="sec">Yrke</div><select id="tocc">'+selOpts(OCC,0)+'</select>'+
+  '<div class="sec">Kjønn</div><select id="tgen"><option value="">Alle</option><option value="Q6581072">Kvinner</option><option value="Q6581097">Menn</option></select>'+
+  '<div class="row"><div><div class="sec">Født fra år</div><input id="tfrom" type="tel" value="1961"></div><div><div class="sec">Født til år</div><input id="tto" type="tel" value="2010"></div></div></div>'+
+  '<div class="sec">Land</div><select id="tcty">'+selOpts(CTRY,1)+'</select>'+
+  '<div class="sec">Hvor kjente</div><select id="tfame">'+selOpts(FAME,1)+'</select>'+
+  '<div class="sec">Maks antall</div><select id="tmax"><option>20</option><option selected>40</option><option>60</option></select>'+
+  '<button class="btn" data-a="search" id="sbtn">Søk</button><p class="note" id="tstat">Data fra Wikidata. For personer brukes statsborgerskap.</p></div>'+
+  '<div><div class="card"><h2>Resultat</h2><div id="tres"><p class="note">Ingen søk ennå.</p></div></div>';
+  var ts=loadThemes();
+  h+='<div class="card"><h2>Mine temaer ('+ts.length+')</h2>';
+  if(!ts.length)h+='<p class="note">Ingen ennå.</p>';
+  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span><button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
+  return h+'</div></div></div></div>';
+}
+function renderRes(){
+  var el=$('#tres');if(!el)return;
+  var old=$('#tname');if(old)TR.suggest=old.value;
+  if(!TR.items.length){el.innerHTML='<p class="note">Ingen treff. Prøv å senke «Hvor kjente» eller utvide årene.</p>';return}
+  var h='<p class="note" style="text-align:left">Fjern treff med dårlig bilde eller feil person med ✕.</p><div class="grid">';
+  TR.items.forEach(function(it,i){h+='<div class="gi"><img src="'+esc(it.img)+'" alt=""><span>'+esc(it.n)+(it.y?'<br><small>f. '+it.y+'</small>':'')+'</span><button class="x" data-a="rmres" data-i="'+i+'">✕</button></div>'});
+  el.innerHTML=h+'</div><input id="tname" type="text" placeholder="Navn på temaet" value="'+esc(TR.suggest)+'"><button class="btn" data-a="savetheme">Lagre som tema ('+TR.items.length+')</button>';
+}
+function wdVals(a){return a.map(function(x){return 'wd:'+x}).join(' ')}
+function wdQuery(q,ms){
+  var ctl=new AbortController(),t=setTimeout(function(){ctl.abort()},ms);
+  return fetch('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(q),{signal:ctl.signal}).then(function(r){
+    clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
+  },function(e){clearTimeout(t);throw e});
+}
+function runSearch(){
+  var type=$('#ttype').value,fame=FAME[$('#tfame').value][1],max=parseInt($('#tmax').value,10),c=CTRY[$('#tcty').value][1];
+  var occ=OCC[$('#tocc').value][1],from=parseInt($('#tfrom').value,10)||1900,to=parseInt($('#tto').value,10)||2100,g=$('#tgen').value;
+  var types=['Q570116','Q4989906','Q16560','Q2977','Q12280','Q11303','Q23413','Q44539','Q32815','Q16970','Q179700','Q33506','Q839954'];
+  /* ett Wikidata-søk per land (hele verden samlet blir for tungt) */
+  var groups=c.length?c.map(function(x){return x}):[null];
+  function mk(cc){
+    var lim=max*2;
+    if(type==='p'){
+      return 'SELECT ?p ?pLabel ?img ?dob ?g ?sl WHERE { { SELECT ?p ?img ?dob ?g ?sl WHERE {VALUES ?occ {'+wdVals(occ)+'} '+
+      (cc?'?p wdt:P27 wd:'+cc+'. ':'')+(g?'VALUES ?g {wd:'+g+'} ':'')+
+      '?p wdt:P106 ?occ; wdt:P31 wd:Q5; wdt:P569 ?dob; wdt:P18 ?img; wdt:P21 ?g; wikibase:sitelinks ?sl. FILTER(?sl>='+fame+' && YEAR(?dob)>='+from+' && YEAR(?dob)<='+to+')} ORDER BY DESC(?sl) LIMIT '+lim+
+      ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
+    }
+    return 'SELECT ?x ?xLabel ?img ?sl WHERE { { SELECT ?x ?img ?sl WHERE {VALUES ?t {'+wdVals(types)+'} '+
+    (cc?'?x wdt:P17 wd:'+cc+'. ':'')+'?x wdt:P31 ?t; wdt:P18 ?img; wikibase:sitelinks ?sl. FILTER(?sl>='+fame+')} ORDER BY DESC(?sl) LIMIT '+(lim*2)+
+    ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
+  }
+  var btn=$('#sbtn'),st=$('#tstat'),rows=[],fails=0,done=0,idx=0;
+  btn.disabled=true;st.textContent='Søker … (kan ta opptil ett minutt)';
+  function finish(){
+    rows.sort(function(a,b){return parseInt(b.sl.value,10)-parseInt(a.sl.value,10)});
+    var seen={},items=[];
+    rows.forEach(function(b){
+      var key=(b.p||b.x).value,n=(b.pLabel||b.xLabel||{}).value||'';
+      if(seen[key]||!n||/^Q\d+$/.test(n)||items.length>=max)return;
+      seen[key]=1;
+      var it={n:n,img:b.img.value.replace(/^http:/,'https:')+'?width=500'};
+      if(type==='p'){it.y=parseInt(b.dob.value,10);it.g=/Q6581072$/.test(b.g.value)?'f':(/Q6581097$/.test(b.g.value)?'m':'x')}
+      items.push(it);
+    });
+    TR.items=items;TR.type=type;
+    var s=$('#tstat');
+    if(s)s.textContent=items.length+' treff funnet.'+(fails?' ('+fails+' av '+groups.length+' søk fikk tidsavbrudd – prøv igjen for flere treff.)':'');
+    var b2=$('#sbtn');if(b2)b2.disabled=false;
+    renderRes();
+  }
+  function next(){
+    if(idx>=groups.length)return;
+    var cc=groups[idx++];
+    wdQuery(mk(cc),70000).then(function(j){rows=rows.concat(j.results.bindings)},function(){fails++}).then(function(){
+      done++;
+      var s=$('#tstat');if(s&&done<groups.length)s.textContent='Søker … '+done+' av '+groups.length+' ferdig';
+      if(done===groups.length)finish();else next();
+    });
+  }
+  for(var k=0;k<Math.min(4,groups.length);k++)next();
+}
+function saveTheme(){
+  var name=$('#tname').value.trim();
+  if(!name){alert('Gi temaet et navn.');return}
+  if(TR.items.length<4){alert('Et tema trenger minst 4 treff.');return}
+  var ts=loadThemes();ts.push({id:String(Date.now()),name:name,type:TR.type,items:TR.items});
+  if(!lsSet('fq-temaer',JSON.stringify(ts))){alert('Fikk ikke lagret (for lite plass?).');return}
+  TR.items=[];TR.suggest='';render();
+}
+
 /* ===== Oppsett ===== */
 var THEMES=[['skuespillere','Skuespillere (bilde) – vestlige, født etter 1960'],['byer','Byer (bilde av kjent landemerke)']];
+function loadThemes(){try{return JSON.parse(lsGet('fq-temaer','[]'))||[]}catch(e){return[]}}
+function allThemes(){
+  var a=THEMES.slice();
+  loadThemes().forEach(function(t){a.push(['u:'+t.id,t.name+' ('+t.items.length+(t.type==='p'?' personer':' steder')+')'])});
+  return a;
+}
+function adminTabs(a){
+  var t=[['setup','Start quiz'],['themes','Temaer'],['editor','Egne spørsmål']];
+  return '<div class="tabs"><button class="tab" data-a="home">‹ Hjem</button>'+t.map(function(x){
+    return '<button class="tab'+(x[0]===a?' on':'')+'" data-a="tab" data-v="'+x[0]+'">'+x[1]+'</button>';
+  }).join('')+'</div>';
+}
 function themeQs(id){
   var out=[],T=window.TEMAER;
+  if(id.indexOf('u:')===0){
+    var th=loadThemes().filter(function(t){return 'u:'+t.id===id})[0];
+    if(!th||th.items.length<4)return out;
+    th.items.forEach(function(a){
+      var same=th.items.filter(function(b){return b!==a&&(th.type!=='p'||!a.g||a.g==='x'||b.g===a.g)});
+      if(same.length<3)same=th.items.filter(function(b){return b!==a});
+      var w=shuffle(same).slice(0,3).map(function(b){return b.n});
+      var q=mkQ(th.type==='p'?'Hvem er personen på bildet?':'Hva heter dette stedet?',a.n,w,a.img);
+      if(a.y)q.info='Født '+a.y;
+      out.push(q);
+    });
+    return out;
+  }
   if(!T)return out;
   if(id==='skuespillere'){
     T.skuespillere.forEach(function(a){
@@ -244,9 +374,9 @@ function themeQs(id){
   return out;
 }
 function vSetup(){
-  var own=loadOwn(),h='<div class="wrap"><div class="top"><button class="x" data-a="home">‹ Tilbake</button><span>Admin – ny quiz</span><span></span></div>';
+  var own=loadOwn(),h='<div class="wrap">'+adminTabs('setup');
   h+='<div class="cols"><div class="card"><h2>Temaer</h2><div class="sec">Med bilde</div>';
-  THEMES.forEach(function(t,i){h+='<label class="chk"><input type="checkbox" id="t'+i+'" checked> '+esc(t[1])+'</label>'});
+  allThemes().forEach(function(t,i){h+='<label class="chk"><input type="checkbox" id="t'+i+'"'+(i<THEMES.length?' checked':'')+'> '+esc(t[1])+'</label>'});
   h+='<div class="sec">Våre egne</div><label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Egne spørsmål ('+own.length+')</label>'+
   '<button class="btn ghost" data-a="own">Legg inn / rediger egne spørsmål</button>'+
   '<div class="sec">Vanlige kategorier</div>';
@@ -274,7 +404,7 @@ function startHost(){
   if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
   var cats=[],themes=[];
   for(var i=0;i<CATS.length;i++)if($('#c'+i).checked)cats.push(CATS[i]);
-  THEMES.forEach(function(t,i){if($('#t'+i).checked)themes.push(t[0])});
+  allThemes().forEach(function(t,i){if($('#t'+i).checked)themes.push(t[0])});
   var own=$('#cown').checked&&!$('#cown').disabled;
   H.cfg={cats:cats,themes:themes,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10)};
   H.qs=buildQs(H.cfg);
@@ -523,6 +653,11 @@ app.addEventListener('click',function(e){
   else if(a==='new')go('setup');
   else if(a==='own'){backTo=view;editIdx=-1;go('editor')}
   else if(a==='back')go(backTo)
+  else if(a==='tab'){editIdx=-1;go(b.getAttribute('data-v'))}
+  else if(a==='search')runSearch();
+  else if(a==='rmres'){TR.items.splice(i,1);renderRes()}
+  else if(a==='savetheme')saveTheme();
+  else if(a==='deltheme'){if(confirm('Slette temaet?')){var ts=loadThemes();ts.splice(i,1);lsSet('fq-temaer',JSON.stringify(ts));render()}}
   else if(a==='editq'){editIdx=i;render()}
   else if(a==='cancelq'){editIdx=-1;render()}
   else if(a==='home')go('home');
@@ -543,6 +678,9 @@ app.addEventListener('click',function(e){
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
 });
 
+app.addEventListener('change',function(e){
+  if(e.target.id==='ttype'){$('#tpers').style.display=e.target.value==='p'?'':'none';$('#tfame').value=e.target.value==='p'?'1':'2'}
+});
 $('#refreshBtn').addEventListener('click',function(){
   if((H.peer||P.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
   var go2=function(){location.reload()};
