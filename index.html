@@ -519,6 +519,11 @@ function hostReveal(){
   }
   broadcast();render();
 }
+function hostFinish(){
+  if(H.phase!=='q'&&H.phase!=='reveal')return;
+  if(H.timer){clearInterval(H.timer);H.timer=null}
+  H.phase='end';broadcast();render();
+}
 function hostAgain(){
   for(var k in H.players){H.players[k].score=0;H.players[k].ans=null;H.players[k].last=null}
   H.qs=buildQs(H.cfg);H.qi=-1;H.phase='lobby';broadcast();render();
@@ -556,12 +561,14 @@ function vHost(){
   }else if(H.phase==='q'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
-    '<p class="small" id="cnt">'+answeredCount()+'</p><button class="btn ghost" data-a="skip">Vis fasit nå</button>';
+    '<p class="small" id="cnt">'+answeredCount()+'</p><button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
+    '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
   }else if(H.phase==='reveal'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
     '<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>'+
-    '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>';
+    '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
+    (H.qi+1>=H.qs.length?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else{
     h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
@@ -688,6 +695,7 @@ app.addEventListener('click',function(e){
   else if(a==='skip')hostReveal();
   else if(a==='next')hostNext();
   else if(a==='again')hostAgain();
+  else if(a==='finish'){if(confirm('Avslutte quizen nå? Alle får se sluttresultatet. Spørsmålet som pågår teller ikke med.'))hostFinish()}
   else if(a==='close'){if(confirm('Avslutte quizen for alle?'))hostClose()}
   else if(a==='share'){
     var u=location.href.split('?')[0].split('#')[0]+'?kode='+H.code;
