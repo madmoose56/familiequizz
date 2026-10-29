@@ -62,6 +62,11 @@ label.chk input{width:22px;height:22px}
 .cols{display:grid;grid-template-columns:1fr;gap:14px}
 @media(min-width:900px){.wrap{max-width:1000px}.qimg{max-height:46vh}.cols{grid-template-columns:1fr 1fr}}
 #refreshBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));right:10px;z-index:8;width:40px;height:40px;border:0;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:24px;line-height:1;padding:0}
+.buzz{display:block;width:min(72vw,300px);height:min(72vw,300px);margin:18px auto;border:0;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fca5a5,#ef4444 55%,#b91c1c);color:#fff;font-size:44px;font-weight:800;line-height:1.1;box-shadow:0 10px 0 #7f1d1d,0 14px 30px rgba(0,0,0,.4);font-family:inherit;touch-action:manipulation}
+.buzz:active{transform:translateY(8px);box-shadow:0 2px 0 #7f1d1d}
+.buzzmsg{background:rgba(255,255,255,.15);border-radius:18px;padding:26px 14px;margin:18px 0;text-align:center;font-size:24px;font-weight:800}
+.buzzmsg.win{background:rgba(34,197,94,.45);font-size:30px}
+.buzzmsg small{font-size:16px;font-weight:600;opacity:.9}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-right:50px}
 .tab{border:0;border-radius:10px;padding:10px 14px;font-size:16px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;font-family:inherit}
 .tab.on{background:#fde047;color:#3b0764}
@@ -400,6 +405,8 @@ function vSetup(){
   for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
   h+='</div><div><div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[10,15,20,25,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
   '<div><h2>Sekunder</h2><select id="ssecs">'+[10,15,20,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div></div>'+
+  '<div class="sec">Spillmåte</div><select id="smode"><option value="a">Alle svarer samtidig – poeng for fart</option><option value="b">Buzzer – først til å trykke får svare</option></select>'+
+  '<p class="note">Buzzer: spillerne svarer høyt, og du trykker Riktig eller Feil. Riktig gir +500, feil gir −100 og spilleren er ute på det spørsmålet. «Sekunder» er tiden noen har på å trykke.</p>'+
   '<p class="note">Spørsmålene fordeles jevnt mellom temaene du velger.</p></div>'+
   '<button class="btn" data-a="open" id="openbtn">Åpne rom</button></div></div></div>';
   return h;
@@ -423,7 +430,7 @@ function startHost(){
   for(var i=0;i<CATS.length;i++)if($('#c'+i).checked)cats.push(CATS[i]);
   allThemes().forEach(function(t,i){if($('#t'+i).checked)themes.push(t[0])});
   var own=$('#cown').checked&&!$('#cown').disabled;
-  H.cfg={cats:cats,themes:themes,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10)};
+  H.cfg={cats:cats,themes:themes,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10),mode:$('#smode').value};
   H.qs=buildQs(H.cfg);
   if(!H.qs.length){alert('Velg minst ett tema.');return}
   H.players={};
@@ -464,9 +471,15 @@ function hostMsg(conn,m){
     p.conn=conn;p.online=true;conn._name=name;
     conn.send({t:'joined',name:name});
     sendTo(p);refreshHost();
+  }else if(m.t==='buzz'){
+    var bp=H.players[conn._name];
+    if(!bp||H.cfg.mode!=='b'||H.phase!=='q'||H.locked[bp.name])return;
+    H.winner=bp.name;H.phase='buzz';H.left=Math.max(0,H.endsAt-Date.now());
+    if(H.timer){clearInterval(H.timer);H.timer=null}
+    broadcast();render();
   }else if(m.t==='ans'){
     var pl=H.players[conn._name];
-    if(!pl||H.phase!=='q'||pl.ans)return;
+    if(!pl||H.cfg.mode==='b'||H.phase!=='q'||pl.ans)return;
     var c=m.c|0,q=H.qs[H.qi],left=Math.max(0,H.endsAt-Date.now()),ok=c===q.correct;
     pl.ans={c:c,ok:ok,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
     conn.send({t:'a',c:c});
@@ -476,15 +489,44 @@ function hostMsg(conn,m){
 }
 function hostDrop(conn){
   var p=H.players[conn._name];
-  if(p&&p.conn===conn){p.online=false;refreshHost();if(H.phase==='q'&&allAnswered())hostReveal()}
+  if(p&&p.conn===conn){p.online=false;refreshHost();if(H.phase==='q'&&H.cfg.mode!=='b'&&allAnswered())hostReveal();else if(H.phase==='q')checkBuzzEnd()}
+}
+function checkBuzzEnd(){
+  if(H.cfg.mode!=='b'||H.phase!=='q')return false;
+  var o=onlineList();
+  if(o.length&&o.every(function(p){return H.locked[p.name]})){hostReveal();return true}
+  return false;
+}
+function startTimer(){
+  if(H.timer)clearInterval(H.timer);
+  H.timer=setInterval(function(){
+    var l=Math.max(0,H.endsAt-Date.now()),e=$('#cd');
+    if(e)e.textContent=Math.ceil(l/1000);
+    if(l<=0)hostReveal();
+  },250);
+}
+function hostJudge(ok){
+  if(H.phase!=='buzz')return;
+  var p=H.players[H.winner];
+  if(ok){
+    if(p){p.score+=500;p.bz=(p.bz||0)+500}
+    hostReveal();
+  }else{
+    if(p){p.score-=100;p.bz=(p.bz||0)-100}
+    H.locked[H.winner]=1;H.winner=null;
+    if(checkBuzzEnd())return;
+    H.phase='q';H.endsAt=Date.now()+Math.max(H.left,5000);startTimer();
+    broadcast();render();
+  }
 }
 function stateFor(p){
   var q=H.qs[H.qi],r=ranked();
   function top(n){return r.slice(0,n).map(function(x){return {name:x.name,score:x.score}})}
   if(H.phase==='lobby')return {t:'s',ph:'lobby',n:r.length};
-  if(H.phase==='q')return {t:'s',ph:'q',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
+  if(H.phase==='q')return {t:'s',ph:'q',b:H.cfg.mode==='b',locked:!!H.locked[p.name],i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
+  if(H.phase==='buzz')return {t:'s',ph:'buzz',i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,who:H.winner,you:H.winner===p.name,locked:!!H.locked[p.name]};
   if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
-    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
+    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{b:H.cfg.mode==='b',c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
@@ -497,22 +539,19 @@ function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   if(H.qi+1>=H.qs.length){H.phase='end'}
   else{
-    H.qi++;H.phase='q';H.endsAt=Date.now()+H.cfg.secs*1000;
-    for(var k in H.players)H.players[k].ans=null;
-    H.timer=setInterval(function(){
-      var l=Math.max(0,H.endsAt-Date.now()),e=$('#cd');
-      if(e)e.textContent=Math.ceil(l/1000);
-      if(l<=0)hostReveal();
-    },250);
+    H.qi++;H.phase='q';H.endsAt=Date.now()+H.cfg.secs*1000;H.locked={};H.winner=null;
+    for(var k in H.players){H.players[k].ans=null;H.players[k].bz=0}
+    startTimer();
   }
   broadcast();render();
 }
 function hostReveal(){
-  if(H.phase!=='q')return;
+  if(H.phase!=='q'&&H.phase!=='buzz')return;
   if(H.timer){clearInterval(H.timer);H.timer=null}
-  H.phase='reveal';H.counts=[0,0,0,0];
+  H.phase='reveal';H.counts=[0,0,0,0];H.winner=null;
   for(var k in H.players){
     var p=H.players[k];
+    if(H.cfg.mode==='b'){p.last={c:null,ok:(p.bz||0)>0,gain:p.bz||0};continue}
     p.last=p.ans||{c:null,ok:false,gain:0};
     p.score+=p.last.gain;
     if(p.last.c!=null&&p.last.c>=0&&p.last.c<4)H.counts[p.last.c]++;
@@ -520,7 +559,7 @@ function hostReveal(){
   broadcast();render();
 }
 function hostFinish(){
-  if(H.phase!=='q'&&H.phase!=='reveal')return;
+  if(H.phase!=='q'&&H.phase!=='reveal'&&H.phase!=='buzz')return;
   if(H.timer){clearInterval(H.timer);H.timer=null}
   H.phase='end';broadcast();render();
 }
@@ -539,7 +578,7 @@ function optsHtml(q,mode){
   for(var i=0;i<q.opts.length;i++){
     var cls='opt o'+i;
     if(mode==='reveal')cls+=(i===q.correct?' right':' dim');
-    h+='<div class="'+cls+'"><b>'+LETT[i]+'</b><span>'+esc(q.opts[i])+'</span>'+(mode==='reveal'?'<em class="cnt" style="font-style:normal">'+H.counts[i]+'</em>':'')+'</div>';
+    h+='<div class="'+cls+'"><b>'+LETT[i]+'</b><span>'+esc(q.opts[i])+'</span>'+(mode==='reveal'&&H.cfg.mode!=='b'?'<em class="cnt" style="font-style:normal">'+H.counts[i]+'</em>':'')+'</div>';
   }
   return h+'</div>';
 }
@@ -547,6 +586,10 @@ function scoreRows(list,max){
   var h='',medal=['🥇','🥈','🥉'];
   list.slice(0,max).forEach(function(p,i){h+='<div class="score"><span>'+(medal[i]||(i+1)+'.')+' '+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
   return h||'<p class="note">Ingen spillere.</p>';
+}
+function lockedHtml(){
+  var n=[];for(var k in H.locked)n.push(esc(k));
+  return n.length?'<p class="small">Ute på dette spørsmålet: '+n.join(', ')+'</p>':'';
 }
 function vHost(){
   var q=H.qs[H.qi],r=ranked(),h='<div class="wrap">';
@@ -561,8 +604,17 @@ function vHost(){
   }else if(H.phase==='q'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
-    '<p class="small" id="cnt">'+answeredCount()+'</p><button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
+    (H.cfg.mode==='b'
+      ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
+      :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
+    '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
     '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
+  }else if(H.phase==='buzz'){
+    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd">⏸</span></div>'+
+    '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(H.winner)+' trykket først!</div><p class="note" style="margin:6px 0 0">La spilleren svare høyt, og avgjør så.</p></div>'+
+    '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
+    '<div class="row"><button class="btn" style="background:#86efac" data-a="jok">✓ Riktig (+500)</button><button class="btn red" data-a="jno">✗ Feil (−100)</button></div>'+
+    '<button class="btn ghost" data-a="finish">Avslutt quizen nå</button>';
   }else if(H.phase==='reveal'){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
@@ -627,6 +679,7 @@ function playerMsg(m){
   if(m.t==='s'){
     P.st=m;P.status='';
     if(m.ph==='q'){
+      P.buzzed=false;
       P.end=Date.now()+m.left;P.chosen=m.ans;
       if(P.tick)clearInterval(P.tick);
       P.tick=setInterval(function(){
@@ -635,6 +688,13 @@ function playerMsg(m){
     }else if(P.tick){clearInterval(P.tick);P.tick=null}
     render();
   }
+}
+function playerBuzz(){
+  if(P.buzzed||!P.st||P.st.ph!=='q'||!P.st.b||P.st.locked)return;
+  P.buzzed=true;
+  try{P.conn.send({t:'buzz'})}catch(e){}
+  try{if(navigator.vibrate)navigator.vibrate(60)}catch(e){}
+  render();
 }
 function playerAnswer(i){
   if(P.chosen!=null||!P.st||P.st.ph!=='q')return;
@@ -650,15 +710,27 @@ function vPlayer(){
     (s?'<p class="note">'+s.n+' spiller'+(s.n===1?'':'e')+' i rommet</p>':'');
   }else if(s.ph==='q'){
     h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+Math.ceil(Math.max(0,P.end-Date.now())/1000)+'</span></div>'+
-    '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'')+'<div class="opts">';
+    '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'');
+    if(s.b){
+      h+=s.locked?'<div class="buzzmsg">Du er ute på dette spørsmålet</div>'
+        :(P.buzzed?'<div class="buzzmsg">Trykket! Venter på bekreftelse …</div>'
+        :'<button class="buzz" data-a="buzz">🔔<br>BUZZ</button>');
+      return h+'<button class="btn ghost" data-a="leave" style="margin-top:20px">Forlat quizen</button></div>';
+    }
+    h+='<div class="opts">';
     for(var i=0;i<s.opts.length;i++){
       h+='<button class="opt o'+i+(P.chosen===i?' mine':(P.chosen!=null?' dim':''))+'" data-a="ans" data-i="'+i+'"'+(P.chosen!=null?' disabled':'')+'><b>'+LETT[i]+'</b><span>'+esc(s.opts[i])+'</span></button>';
     }
     h+='</div>'+(P.chosen!=null?'<p class="big" style="font-size:22px">Svar sendt ✓</p><p class="note">Venter på de andre…</p>':'');
+  }else if(s.ph==='buzz'){
+    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span></span></div>'+
+    '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'')+
+    (s.you?'<div class="buzzmsg win">✅ Du trykket først!<br><small>Svar høyt – verten avgjør</small></div>'
+      :'<div class="buzzmsg">🔔 '+esc(s.who)+' trykket først'+(P.buzzed?'<br><small>Noen var raskere enn deg</small>':'')+'</div>');
   }else if(s.ph==='reveal'){
-    var y=s.you;
-    h+='<div class="big '+(y.ok?'ok':'no')+'">'+(y.c==null?'⏱ Ikke svart':(y.ok?'✓ Riktig!':'✗ Feil'))+'</div>'+
-    '<p class="sub" style="font-size:22px">'+(y.gain?'+'+y.gain+' poeng':'0 poeng')+'</p>'+
+    var y=s.you,gtxt=(y.gain>0?'+':'')+y.gain+' poeng';
+    h+='<div class="big '+(y.ok?'ok':'no')+'">'+(y.b?(y.gain>0?'✓ Riktig!':(y.gain<0?'✗ Feil':'Ingen poeng')):(y.c==null?'⏱ Ikke svart':(y.ok?'✓ Riktig!':'✗ Feil')))+'</div>'+
+    '<p class="sub" style="font-size:22px">'+gtxt+'</p>'+
     '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+LETT[s.correct]+'. '+esc(s.opts[s.correct])+'</div>'+(s.info?'<p class="note" style="margin:4px 0 0">'+esc(s.info)+'</p>':'')+'</div>'+
     '<div class="card"><h2>Du er nr. '+y.rank+' med '+y.score+' poeng</h2>'+scoreRows(s.top,5)+'</div>'+
     '<p class="note">Venter på neste spørsmål…</p>';
@@ -703,6 +775,9 @@ app.addEventListener('click',function(e){
     else prompt('Kopier lenken:',u);
   }
   else if(a==='ans')playerAnswer(i);
+  else if(a==='buzz')playerBuzz();
+  else if(a==='jok')hostJudge(true);
+  else if(a==='jno')hostJudge(false);
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
 });
 
