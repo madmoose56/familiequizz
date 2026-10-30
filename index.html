@@ -98,6 +98,8 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .sub{font-size:2vw!important}
 .wrap.wide .big{font-size:2.4vw}
 .wrap.wide .row{gap:1vw}
+.ctl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr);gap:1.6vw;align-items:end;margin-top:1.2vw}
+.ctl .tabs{margin:0}
 .wrap.wide .mid>.card{padding:.7vw 1vw!important;margin:0 0 .8vw!important}
 .wrap.wide .tab{font-size:1.4vw;padding:.7vw 1.2vw;border-radius:.8vw}
 .wrap.wide .sec{font-size:1.2vw}
@@ -937,6 +939,8 @@ function modeToggle(label){
   '<button class="tab'+(H.cfg.mode==='a'?' on':'')+'" data-a="setmode" data-v="a">A B C D</button>'+
   '<button class="tab'+(H.cfg.mode==='b'?' on':'')+'" data-a="setmode" data-v="b">🔔 Buzzer (først til å trykke)</button></div>';
 }
+/* Nederste rad på vertsskjermen: venstre / midten / høyre, samme kolonner som resten */
+function ctlBar(l,c,r){return '<div class="ctl"><div>'+l+'</div><div>'+c+'</div><div>'+r+'</div></div>'}
 function queueHtml(){
   var h='<div class="card" style="margin-top:12px"><h2>Køen (etter hvor fort de trykket)</h2>';
   H.queue.forEach(function(e,i){
@@ -994,10 +998,10 @@ function vHost(){
     (H.qmode==='b'
       ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
       :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
-    '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
-    '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
+    '';
     h+=qhead+'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+qmid+'</div>'+
-      (H.qmode==='b'?'<div class="card"><h2>Køen</h2><p class="note">Ingen har trykket ennå</p></div>':'<div class="card" id="times">'+timesInner(false)+'</div>')+'</div>';
+      (H.qmode==='b'?'<div class="card"><h2>Køen</h2><p class="note">Ingen har trykket ennå</p></div>':'<div class="card" id="times">'+timesInner(false)+'</div>')+'</div>'+
+      ctlBar('<button class="btn ghost" data-a="skip">Vis fasit nå</button>','','<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else if(H.phase==='buzz'){
     var cur=H.queue[H.turn];
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+cdNow()+'</span></div>'+
@@ -1005,18 +1009,19 @@ function vHost(){
     '<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+
     '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+' – svarer A–D på mobilen</p></div>'+
     (q.img?'<img class="qimg" style="max-height:28vh" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
-    '<div class="row"><button class="btn ghost" data-a="skipturn">Hopp over '+esc(cur.name)+'</button>'+
-    '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
-    '<button class="btn red" data-a="finish">Avslutt quizen nå</button></div></div>'+queueHtml()+'</div>';
+    '</div>'+queueHtml()+'</div>'+
+    ctlBar('<button class="btn ghost" data-a="skip">Vis fasit nå</button>','<button class="btn ghost" data-a="skipturn">Hopp over '+esc(cur.name)+'</button>','<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else if(H.phase==='reveal'){
     var rhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     qDiv(q);
     var rmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
-    (H.qi+1>=H.qs.length?'':modeToggle('Neste spørsmål spilles som'))+
-    '<div class="row"><button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
-    (H.qi+1>=H.qs.length?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>')+'</div>';
+    '';
+    var last=H.qi+1>=H.qs.length;
     h+=rhead+'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+rmid+'</div>'+
-      (H.qmode==='b'?gainsHtml():'<div class="card" id="times">'+timesInner(true)+'</div>')+'</div>';
+      (H.qmode==='b'?gainsHtml():'<div class="card" id="times">'+timesInner(true)+'</div>')+'</div>'+
+      ctlBar('<button class="btn" data-a="next">'+(last?'Se sluttresultat':'Neste spørsmål')+'</button>',
+        last?'':modeToggle('Neste spørsmål spilles som'),
+        last?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else{
     h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
