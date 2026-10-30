@@ -228,7 +228,10 @@ function render(){
 
 /* ===== Hjem ===== */
 /* Mobil er bare for spillere; vert/admin (spørsmål, quizstart) er kun på PC/nettbrett */
-function isPhone(){return window.matchMedia&&window.matchMedia('(max-width:700px)').matches}
+/* Adresse med ?admin (eller ?admin=0 for å slå av igjen) åpner admin også på smal skjerm */
+if(/[?&]admin=0/.test(location.search))lsSet('fq-admin','');
+else if(/[?&]admin/.test(location.search))lsSet('fq-admin','1');
+function isPhone(){return !lsGet('fq-admin','')&&window.matchMedia&&window.matchMedia('(max-width:700px)').matches}
 function vHome(){
   var kode=(location.search.match(/kode=(\d+)/)||[])[1]||'';
   var n=loadOwn().length;

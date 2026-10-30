@@ -17,7 +17,7 @@ Repo: `madmoose56/familiequizz` → GitHub Pages (gren `main`, rot).
 - Spørsmålsbank `BANK` i index.html (6 kategorier × 8). Egne spørsmål (med valgfritt bilde, forminsket) lagres i localStorage `fq-egne` på vertens telefon.
 - Spillere som mister forbindelsen kobler seg på igjen med samme navn og beholder poengene.
 
-## Admin (kun PC)
+## Admin (kun PC/nettbrett; ?admin i adressen slår det på også på smal skjerm, ?admin=0 av)
 - Mobil (<700 px) viser bare «Bli med»; vert/admin skjules (`isPhone()`). Admin har tre faner: Start quiz, Temaer, Egne spørsmål.
 - Faste billedtemaer ligger i `temaer.js` (skuespillere, byer; laget av et engangsskript mot Wikipedia, bilder fra Commons).
 - Tema-bygger har kildevalg (`#tsrc`): Wikidata, SNL (`snl.no/api/v1/search`, 10 treff per kall + offset, ingress som ledetråd, bilde fra `first_image_url`), Nasjonalbiblioteket (`api.nb.no/catalog/v1/items`, `mediatype:bilder`, år fra `dateCreated`, tommel via `www.nb.no/services/image/resolver`) og DigitaltMuseum (`api.dimu.org/api/solr/select`, krever API-nøkkel; «demo» er stengt; bilde `ems.dimu.org/image/<id>?dimension=800x800`; UTESTET). Temaelementer har `k`: `n` (navn fra bilde), `c` (ledetråd→navn), `y` («Hvilket år?»).
