@@ -293,6 +293,25 @@ var OCC=[['Skuespillere',['Q33999','Q10800557','Q10798782']],['Sangere',['Q17722
 var WEST=['Q30','Q145','Q16','Q408','Q27','Q183','Q142','Q38','Q29','Q20','Q34','Q35'];
 var CTRY=[['Alle land',[]],['Vestlige land (USA, Europa, Canada, Australia …)',WEST],['Norge',['Q20']],['Sverige',['Q34']],['Danmark',['Q35']],['Finland',['Q33']],['USA',['Q30']],['Storbritannia',['Q145']],['Irland',['Q27']],['Tyskland',['Q183']],['Frankrike',['Q142']],['Italia',['Q38']],['Spania',['Q29']],['Canada',['Q16']],['Australia',['Q408']]];
 var FAME=[['Veldig kjente',80],['Kjente',40],['Også mindre kjente',15]];
+/* Wikidata-kategorier: [navn, klasser, bilde-egenskap, land-egenskap (eller null), spørsmålstekst] */
+var WDCATS=[
+['Land – flagg',['Q6256','Q3624078'],'P41',null,'Hvilket land har dette flagget?'],
+['Byer (bilde)',['Q515'],'P18','P17','Hvilken by er dette?'],
+['Fjell',['Q8502'],'P18','P17','Hva heter dette fjellet?'],
+['Innsjøer',['Q23397'],'P18','P17','Hva heter denne innsjøen?'],
+['Øyer',['Q23442'],'P18','P17','Hva heter denne øya?'],
+['Vulkaner',['Q8072'],'P18','P17','Hva heter denne vulkanen?'],
+['Fossefall',['Q34038'],'P18','P17','Hva heter dette fossefallet?'],
+['Slott og festninger',['Q23413','Q57831'],'P18','P17','Hva heter dette slottet eller festningen?'],
+['Broer',['Q12280'],'P18','P17','Hva heter denne brua?'],
+['Kirker og katedraler',['Q2977','Q16970'],'P18','P17','Hva heter denne kirken?'],
+['Museer',['Q33506'],'P18','P17','Hva heter dette museet?'],
+['Skyskrapere',['Q11303'],'P18','P17','Hva heter denne skyskraperen?'],
+['Statuer',['Q179700'],'P18','P17','Hva heter denne statuen?'],
+['Malerier',['Q3305213'],'P18',null,'Hva heter dette maleriet?'],
+['Bilmerker – logo',['Q786820'],'P154',null,'Hvilket bilmerke har denne logoen?'],
+['Fotballklubber – logo',['Q476028'],'P154','P17','Hvilken fotballklubb har denne logoen?'],
+['Musikkgrupper – bilde',['Q215380'],'P18','P495','Hvilken gruppe er dette?']];
 /* SNL: nasjonalitet leses fra første setning («var en norsk forfatter …») */
 var SNL_WEST=['norsk','svensk','dansk','finsk','islandsk','amerikansk','britisk','engelsk','skotsk','walisisk','irsk','tysk','fransk','italiensk','spansk','kanadisk','australsk','newzealandsk','nederlandsk','belgisk','sveitsisk','østerriksk'];
 var SNL_CTRY=[['Alle land',[]],['Vestlige land (USA, Europa, Canada, Australia …)',SNL_WEST],['Norge',['norsk']],['Sverige',['svensk']],['Danmark',['dansk']],['Finland',['finsk']],['USA',['amerikansk']],['Storbritannia',['britisk','engelsk','skotsk','walisisk']],['Irland',['irsk']],['Tyskland',['tysk']],['Frankrike',['fransk']],['Italia',['italiensk']],['Spania',['spansk']],['Canada',['kanadisk']],['Australia',['australsk']]];
@@ -301,7 +320,8 @@ function selOpts(arr,def){return arr.map(function(x,i){return '<option value="'+
 function vThemes(){
   var h='<div class="wrap">'+adminTabs('themes')+'<div class="cols"><div class="card"><h2>Nytt tema – tilpass søket</h2>'+
   '<div class="sec">Kilde</div><select id="tsrc"><option value="wd">Wikidata – personer og steder med bilde</option><option value="snl">SNL – Store norske leksikon (personer, begreper, hendelser)</option><option value="nb">Nasjonalbiblioteket – historiske bilder (gjett året)</option><option value="dimu">DigitaltMuseum – historiske foto (krever API-nøkkel)</option></select>'+
-  '<div class="src src-wd"><div class="sec">Type</div><select id="ttype"><option value="p">Personer – «Hvem er dette?»</option><option value="l">Landemerker – «Hva heter dette?»</option></select>'+
+  '<div class="src src-wd"><div class="sec">Type</div><select id="ttype"><option value="p">Personer – «Hvem er dette?»</option><option value="l">Landemerker – «Hva heter dette?»</option><option value="k">Kategorier – flagg, fjell, byer, logoer, kunst …</option></select>'+
+  '<div id="tcatrow" style="display:none"><div class="sec">Kategori</div><select id="tcat">'+selOpts(WDCATS,0)+'</select></div>'+
   '<div id="tpers"><div class="sec">Yrke</div><select id="tocc">'+selOpts(OCC,0)+'</select>'+
   '<div class="sec">Kjønn</div><select id="tgen"><option value="">Alle</option><option value="Q6581072">Kvinner</option><option value="Q6581097">Menn</option></select>'+
   '<div class="row"><div><div class="sec">Født fra år</div><input id="tfrom" type="tel" value="1961"></div><div><div class="sec">Født til år</div><input id="tto" type="tel" value="2010"></div></div></div>'+
@@ -488,7 +508,9 @@ function runSearch(){
   var occ=OCC[$('#tocc').value][1],from=parseInt($('#tfrom').value,10)||1900,to=parseInt($('#tto').value,10)||2100,g=$('#tgen').value;
   var types=['Q570116','Q4989906','Q16560','Q2977','Q12280','Q11303','Q23413','Q44539','Q32815','Q16970','Q179700','Q33506','Q839954'];
   /* ett Wikidata-søk per land (hele verden samlet blir for tungt) */
-  var groups=c.length?c.map(function(x){return x}):[null];
+  var cat=type==='k'?WDCATS[$('#tcat').value]:null,ip='P18',cp='P17';
+  if(cat){types=cat[1];ip=cat[2];cp=cat[3]}
+  var groups=(c.length&&cp)?c.map(function(x){return x}):[null];
   function mk(cc){
     var lim=max*2;
     if(type==='p'){
@@ -498,10 +520,10 @@ function runSearch(){
       ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
     }
     return 'SELECT ?x ?xLabel ?img ?sl WHERE { { SELECT ?x ?img ?sl WHERE {VALUES ?t {'+wdVals(types)+'} '+
-    (cc?'?x wdt:P17 wd:'+cc+'. ':'')+'?x wdt:P31 ?t; wdt:P18 ?img; wikibase:sitelinks ?sl. FILTER(?sl>='+fame+')} ORDER BY DESC(?sl) LIMIT '+(lim*2)+
+    (cc&&cp?'?x wdt:'+cp+' wd:'+cc+'. ':'')+'?x wdt:P31 ?t; wdt:'+ip+' ?img; wikibase:sitelinks ?sl. FILTER(?sl>='+fame+')} ORDER BY DESC(?sl) LIMIT '+(lim*2)+
     ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
   }
-  var F={type:type,occ:$('#tocc').value,gen:g,from:from,to:to,cty:$('#tcty').value,fame:$('#tfame').value,max:$('#tmax').value};
+  var F={type:type,cat:$('#tcat').value,occ:$('#tocc').value,gen:g,from:from,to:to,cty:$('#tcty').value,fame:$('#tfame').value,max:$('#tmax').value};
   var btn=$('#sbtn'),st=$('#tstat'),rows=[],fails=0,done=0,idx=0;
   btn.disabled=true;st.textContent='Søker … (kan ta opptil ett minutt)';
   function finish(){
@@ -512,10 +534,11 @@ function runSearch(){
       if(seen[key]||!n||/^Q\d+$/.test(n)||items.length>=max)return;
       seen[key]=1;
       var it={n:n,img:b.img.value.replace(/^http:/,'https:')+'?width=500'};
+      if(cat)it.qt=cat[4];
       if(type==='p'){it.y=parseInt(b.dob.value,10);it.g=/Q6581072$/.test(b.g.value)?'f':(/Q6581097$/.test(b.g.value)?'m':'x')}
       items.push(it);
     });
-    TR.items=items;TR.type=type;TR.filters=F;
+    TR.items=items;TR.type=type==='k'?'x':type;TR.filters=F;
     var s=$('#tstat');
     if(s)s.textContent=items.length+' treff funnet.'+(fails?' ('+fails+' av '+groups.length+' søk fikk tidsavbrudd – prøv igjen for flere treff.)':'');
     var b2=$('#sbtn');if(b2)b2.disabled=false;
@@ -540,7 +563,7 @@ function rerunTheme(i,noRun){
     set('#sterms',f.terms);set('#snltype',f.snltype);if($('#snlimg'))$('#snlimg').checked=!!f.snlimg;set('#snlcty',f.snlcty);set('#sfrom',f.sfrom);set('#sto',f.sto);
     set('#bterms',f.terms);set('#bfrom',f.from);set('#bto',f.to);set('#tmax',f.max);
   }else{
-    set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
+    set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';$('#tcatrow').style.display=f.type==='k'?'':'none';set('#tcat',f.cat);
     set('#tocc',f.occ);set('#tgen',f.gen);set('#tfrom',f.from);set('#tto',f.to);set('#tcty',f.cty);set('#tfame',f.fame);set('#tmax',f.max);
   }
   TR.replaceId=t.id;TR.suggest=t.name;
@@ -595,7 +618,7 @@ function themeQs(id){
       if(same.length<3)same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'});
       if(same.length<3)return;
       var w=shuffle(same).slice(0,3).map(function(b){return b.n});
-      var text=k==='c'?'Hvem eller hva beskrives? «'+a.clue+'»':(th.type==='p'?'Hvem er personen på bildet?':(th.type==='l'?'Hva heter dette stedet?':'Hvem eller hva er dette?'));
+      var text=k==='c'?'Hvem eller hva beskrives? «'+a.clue+'»':(a.qt||(th.type==='p'?'Hvem er personen på bildet?':(th.type==='l'?'Hva heter dette stedet?':'Hvem eller hva er dette?')));
       q=mkQ(text,a.n,w,k==='c'?null:a.img);
       q.info=a.info||(a.y&&th.type==='p'?'Født '+a.y:'');
       out.push(q);
@@ -1099,7 +1122,7 @@ app.addEventListener('click',function(e){
 
 app.addEventListener('change',function(e){
   if(e.target.id==='tsrc')setSrc(e.target.value);
-  if(e.target.id==='ttype'){$('#tpers').style.display=e.target.value==='p'?'':'none';$('#tfame').value=e.target.value==='p'?'1':'2'}
+  if(e.target.id==='ttype'){var tv=e.target.value;$('#tpers').style.display=tv==='p'?'':'none';$('#tcatrow').style.display=tv==='k'?'':'none';$('#tfame').value=tv==='l'?'2':'1'}
 });
 $('#refreshBtn').addEventListener('click',function(){
   if((H.peer||P.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;

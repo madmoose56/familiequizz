@@ -22,6 +22,7 @@ Repo: `madmoose56/familiequizz` → GitHub Pages (gren `main`, rot).
 - Faste billedtemaer ligger i `temaer.js` (skuespillere, byer; laget av et engangsskript mot Wikipedia, bilder fra Commons).
 - Tema-bygger har kildevalg (`#tsrc`): Wikidata, SNL (`snl.no/api/v1/search`, 10 treff per kall + offset, ingress som ledetråd, bilde fra `first_image_url`), Nasjonalbiblioteket (`api.nb.no/catalog/v1/items`, `mediatype:bilder`, år fra `dateCreated`, tommel via `www.nb.no/services/image/resolver`) og DigitaltMuseum (`api.dimu.org/api/solr/select`, krever API-nøkkel; «demo» er stengt; bilde `ems.dimu.org/image/<id>?dimension=800x800`; UTESTET). Temaelementer har `k`: `n` (navn fra bilde), `c` (ledetråd→navn), `y` («Hvilket år?»).
 - Tema-bygger Wikidata: søker Wikidata (SPARQL, ett søk per land, 4 samtidig, 70 s timeout) med filtre yrke/kjønn/fødselsår/land/«hvor kjente». Resultatet kan trimmes og lagres som eget tema i localStorage `fq-temaer`. Bilder via Commons `Special:FilePath?width=500`.
+- Wikidata er hovedkilden for mange treff (SNL/NB er norske og gir få). `WDCATS` i index.html er kategorilisten (flagg, byer, fjell, innsjøer, øyer, vulkaner, fossefall, slott, broer, kirker, museer, skyskrapere, statuer, malerier, bil- og fotballogoer, musikkgrupper). Dyr/planter (taxon) gir tidsavbrudd i Wikidata. MCP-servere kan ikke kalles fra selve appen (kun fra Claude-økten); appen kan bare bruke åpne nett-API-er.
 - Oppdater-pil (↻) øverst til høyre tømmer cache og laster på nytt.
 
 ## Arbeidsmåte
