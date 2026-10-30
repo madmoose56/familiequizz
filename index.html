@@ -309,8 +309,8 @@ var WDCATS=[
 ['Skyskrapere',['Q11303'],'P18','P17','Hva heter denne skyskraperen?'],
 ['Statuer',['Q179700'],'P18','P17','Hva heter denne statuen?'],
 ['Malerier',['Q3305213'],'P18',null,'Hva heter dette maleriet?'],
-['Bilmerker – logo',['Q786820'],'P154',null,'Hvilket bilmerke har denne logoen?'],
-['Fotballklubber – logo',['Q476028'],'P154','P17','Hvilken fotballklubb har denne logoen?'],
+['Biler – hvilket merke? (foto)',['Q3231690'],'P18',null,'Hvilket bilmerke lager denne bilen?',false,'mfr'],
+['Fotballklubber – logo (tekst fjernes automatisk, se over)',['Q476028'],'P154','P17','Hvilken fotballklubb har denne logoen?',true],
 ['Musikkgrupper – bilde',['Q215380'],'P18','P495','Hvilken gruppe er dette?']];
 /* SNL: nasjonalitet leses fra første setning («var en norsk forfatter …») */
 var SNL_WEST=['norsk','svensk','dansk','finsk','islandsk','amerikansk','britisk','engelsk','skotsk','walisisk','irsk','tysk','fransk','italiensk','spansk','kanadisk','australsk','newzealandsk','nederlandsk','belgisk','sveitsisk','østerriksk'];
@@ -476,6 +476,54 @@ function searchDimu(terms,from,to,key){
     return items;
   });
 }
+/* Logoer: fjern de som viser tekst (navnet) ved å lese bildet med OCR (Tesseract.js lastes ved behov) */
+var TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function loadScript(src){
+  return new Promise(function(res,rej){
+    if(window.Tesseract)return res();
+    var s=document.createElement('script');s.src=src;s.onload=function(){res()};s.onerror=function(){rej(new Error('kunne ikke laste tekstleseren'))};document.head.appendChild(s);
+  });
+}
+function commonsThumbs(files){
+  var batches=[];
+  for(var i=0;i<files.length;i+=40)batches.push(files.slice(i,i+40));
+  return Promise.all(batches.map(function(b){
+    var u='https://commons.wikimedia.org/w/api.php?action=query&prop=imageinfo&iiprop=url&iiurlwidth=900&format=json&origin=*&titles='+encodeURIComponent(b.map(function(f){return 'File:'+f}).join('|'));
+    return getJson(u,30000).catch(function(){return null});
+  })).then(function(rs){
+    var m={};
+    rs.forEach(function(d){
+      if(!d||!d.query||!d.query.pages)return;
+      Object.keys(d.query.pages).forEach(function(k){var p=d.query.pages[k];if(p.imageinfo&&p.imageinfo[0])m[p.title.replace(/^File:/,'').replace(/_/g,' ')]=p.imageinfo[0].thumburl});
+    });
+    return m;
+  });
+}
+function ocrFilter(items,onProgress){
+  return Promise.all([loadScript(TESS_URL),commonsThumbs(items.map(function(it){return it.file}))]).then(function(r){
+    var thumbs=r[1],keep=new Array(items.length),idx=0,done=0;
+    return Promise.all([0,1,2].map(function(){return Tesseract.createWorker('eng')})).then(function(ws){
+      return Promise.all(ws.map(function(w){
+        return w.setParameters({tessedit_pageseg_mode:'11'}).then(function(){
+          function step(){
+            if(idx>=items.length)return Promise.resolve();
+            var k=idx++,u=thumbs[items[k].file.replace(/_/g,' ')];
+            if(!u){done++;return step()}
+            function hasText(res){return (res.data.words||[]).some(function(wd){return /[A-Za-zÀ-ÿ]{2,}/.test(wd.text)&&wd.confidence>=20})}
+            return fetch(u).then(function(x){return x.blob()}).then(function(b){
+              /* to leseformer: spredt tekst (11) og tekstblokk (6); tekst i en av dem fjerner logoen */
+              return w.setParameters({tessedit_pageseg_mode:'11'}).then(function(){return w.recognize(b)}).then(function(r1){
+                if(hasText(r1)){keep[k]=false;return}
+                return w.setParameters({tessedit_pageseg_mode:'6'}).then(function(){return w.recognize(b)}).then(function(r2){keep[k]=!hasText(r2)});
+              });
+            }).catch(function(){}).then(function(){done++;onProgress(done,items.length);return step()});
+          }
+          return step();
+        });
+      })).then(function(){return Promise.all(ws.map(function(w){return w.terminate()}))});
+    }).then(function(){return items.filter(function(it,k){return keep[k]})});
+  });
+}
 function setSrc(v){
   var show={wd:'.src-wd',snl:'.src-snl',nb:'.src-b',dimu:'.src-b,.src-d'};
   [].forEach.call(document.querySelectorAll('.src'),function(e){e.style.display='none'});
@@ -511,8 +559,14 @@ function runSearch(){
   var cat=type==='k'?WDCATS[$('#tcat').value]:null,ip='P18',cp='P17';
   if(cat){types=cat[1];ip=cat[2];cp=cat[3]}
   var groups=(c.length&&cp)?c.map(function(x){return x}):[null];
+  var maxPre=(cat&&cat[5])?Math.min(max*2,120):max;
   function mk(cc){
     var lim=max*2;
+    if(cat&&cat[6]==='mfr'){
+      /* bilmodeller med foto; svaret er produsenten (P176). Ingen logoer, så navnet vises ikke i bildet */
+      return 'SELECT ?m ?mLabel ?x ?img ?sl WHERE { { SELECT ?m ?x ?img ?sl WHERE {?x wdt:P31 wd:Q3231690; wdt:P18 ?img; wdt:P176 ?m; wikibase:sitelinks ?sl. FILTER(?sl>='+(fame>=80?40:(fame>=40?25:12))+')} ORDER BY DESC(?sl) LIMIT '+(max*5)+
+      ' } SERVICE wikibase:label {bd:serviceParam wikibase:language "nb,no,en,mul".}}';
+    }
     if(type==='p'){
       return 'SELECT ?p ?pLabel ?img ?dob ?g ?sl WHERE { { SELECT ?p ?img ?dob ?g ?sl WHERE {VALUES ?occ {'+wdVals(occ)+'} '+
       (cc?'?p wdt:P27 wd:'+cc+'. ':'')+(g?'VALUES ?g {wd:'+g+'} ':'')+
@@ -528,21 +582,34 @@ function runSearch(){
   btn.disabled=true;st.textContent='Søker … (kan ta opptil ett minutt)';
   function finish(){
     rows.sort(function(a,b){return parseInt(b.sl.value,10)-parseInt(a.sl.value,10)});
-    var seen={},items=[];
+    var seen={},items=[],mc={};
     rows.forEach(function(b){
-      var key=(b.p||b.x).value,n=(b.pLabel||b.xLabel||{}).value||'';
-      if(seen[key]||!n||/^Q\d+$/.test(n)||items.length>=max)return;
-      seen[key]=1;
+      var mfr=cat&&cat[6]==='mfr',key=(b.p||b.x).value,n=((mfr?b.mLabel:(b.pLabel||b.xLabel))||{}).value||'';
+      if(seen[key]||!n||/^Q\d+$/.test(n)||items.length>=maxPre)return;
+      if(mfr){mc[n]=(mc[n]||0)+1;if(mc[n]>3)return}
       var it={n:n,img:b.img.value.replace(/^http:/,'https:')+'?width=500'};
+      if(cat&&cat[5]){var fm=String(b.img.value).split('Special:FilePath/')[1];if(!fm)return;it.file=decodeURIComponent(fm)}
+      seen[key]=1;
       if(cat)it.qt=cat[4];
       if(type==='p'){it.y=parseInt(b.dob.value,10);it.g=/Q6581072$/.test(b.g.value)?'f':(/Q6581097$/.test(b.g.value)?'m':'x')}
       items.push(it);
     });
-    TR.items=items;TR.type=type==='k'?'x':type;TR.filters=F;
-    var s=$('#tstat');
-    if(s)s.textContent=items.length+' treff funnet.'+(fails?' ('+fails+' av '+groups.length+' søk fikk tidsavbrudd – prøv igjen for flere treff.)':'');
-    var b2=$('#sbtn');if(b2)b2.disabled=false;
-    renderRes();
+    function fin(list,note){
+      list.forEach(function(it){delete it.file});
+      TR.items=list.slice(0,max);TR.type=type==='k'?'x':type;TR.filters=F;
+      var s=$('#tstat');
+      if(s)s.textContent=TR.items.length+' treff funnet.'+(note||'')+(fails?' ('+fails+' av '+groups.length+' søk fikk tidsavbrudd – prøv igjen for flere treff.)':'');
+      var b2=$('#sbtn');if(b2)b2.disabled=false;
+      renderRes();
+    }
+    if(cat&&cat[5]&&items.length){
+      var s0=$('#tstat');if(s0)s0.textContent='Sjekker '+items.length+' logoer for tekst … (kan ta et minutt)';
+      ocrFilter(items,function(d,n){var s1=$('#tstat');if(s1)s1.textContent='Sjekker logoer for tekst … '+d+' av '+n}).then(function(kept){
+        fin(kept,' ('+(items.length-kept.length)+' logoer med tekst er fjernet.)');
+      },function(e){
+        fin(items,' (Tekstsjekken feilet: '+(e&&e.message||e)+' – se over logoene selv.)');
+      });
+    }else fin(items);
   }
   function next(){
     if(idx>=groups.length)return;
