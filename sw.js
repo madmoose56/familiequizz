@@ -1,4 +1,4 @@
-var CACHE='familiequizz-v12';
+var CACHE='familiequizz-v13';
 self.addEventListener('install',function(){self.skipWaiting()});
 self.addEventListener('activate',function(e){
   e.waitUntil(caches.keys().then(function(ks){

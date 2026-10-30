@@ -640,7 +640,15 @@ function fmtS(ms){return (ms/1000).toFixed(1).replace('.',',')+'sek'}
 /* Venstre: poengtavle fortløpende, medalje til nr 1 */
 function boardHtml(){
   var h='<div class="card"><h2>Poeng</h2>';
-  ranked().forEach(function(p,i){h+='<div class="score"><span>'+(i===0&&p.score>0?'🥇 ':'')+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
+  var medal=['🥇 ','🥈 ','🥉 '];
+  ranked().forEach(function(p,i){h+='<div class="score"><span>'+(i<3&&p.score>0?medal[i]:'')+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
+  return h+'</div>';
+}
+/* Buzzer, fasit: poeng hver spiller fikk på dette spørsmålet */
+function gainsHtml(){
+  var h='<div class="card"><h2>Dette spørsmålet</h2>',n=0;
+  ranked().forEach(function(p){var g=p.last?p.last.gain:0;if(g){n++;h+='<div class="score"><span>'+(g>0?'✓ ':'✗ ')+esc(p.name)+'</span><b>'+(g>0?'+':'')+g+'</b></div>'}});
+  if(!n)h+='<p class="note">Ingen fikk poeng.</p>';
   return h+'</div>';
 }
 /* Høyre: svartid per spiller, raskest øverst */
@@ -655,7 +663,7 @@ function timesInner(reveal){
   return h;
 }
 function vHost(){
-  var wide=(H.phase==='q'||H.phase==='reveal')&&H.qmode!=='b';
+  var wide=H.phase==='q'||H.phase==='reveal'||H.phase==='buzz';
   var q=H.qs[H.qi],r=ranked(),h='<div class="wrap'+(wide?' wide':'')+'">';
   if(H.phase==='lobby'){
     var url=location.href.split('?')[0].split('#')[0];
@@ -674,24 +682,25 @@ function vHost(){
       :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
     '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
     '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
-    h+=H.qmode==='b'?qmid:'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+qmid+'</div><div class="card" id="times">'+timesInner(false)+'</div></div>';
+    h+='<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+qmid+'</div>'+
+      (H.qmode==='b'?'<div class="card"><h2>Køen</h2><p class="note">Ingen har trykket ennå</p></div>':'<div class="card" id="times">'+timesInner(false)+'</div>')+'</div>';
   }else if(H.phase==='buzz'){
     var cur=H.queue[H.turn];
-    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
+    h+='<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+
+    '<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
     '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+' – svarer A–D på mobilen</p></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
-    queueHtml()+
     '<button class="btn ghost" data-a="skipturn">Hopp over '+esc(cur.name)+'</button>'+
     '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
-    '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
+    '<button class="btn red" data-a="finish">Avslutt quizen nå</button></div>'+queueHtml()+'</div>';
   }else if(H.phase==='reveal'){
     var rmid='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
-    (wide?'':'<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>')+
     (H.qi+1>=H.qs.length?'':modeToggle('Neste spørsmål spilles som'))+
     '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
     (H.qi+1>=H.qs.length?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
-    h+=wide?'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+rmid+'</div><div class="card" id="times">'+timesInner(true)+'</div></div>':rmid;
+    h+='<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+rmid+'</div>'+
+      (H.qmode==='b'?gainsHtml():'<div class="card" id="times">'+timesInner(true)+'</div>')+'</div>';
   }else{
     h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
