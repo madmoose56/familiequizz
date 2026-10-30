@@ -293,6 +293,9 @@ var OCC=[['Skuespillere',['Q33999','Q10800557','Q10798782']],['Sangere',['Q17722
 var WEST=['Q30','Q145','Q16','Q408','Q27','Q183','Q142','Q38','Q29','Q20','Q34','Q35'];
 var CTRY=[['Alle land',[]],['Vestlige land (USA, Europa, Canada, Australia …)',WEST],['Norge',['Q20']],['Sverige',['Q34']],['Danmark',['Q35']],['Finland',['Q33']],['USA',['Q30']],['Storbritannia',['Q145']],['Irland',['Q27']],['Tyskland',['Q183']],['Frankrike',['Q142']],['Italia',['Q38']],['Spania',['Q29']],['Canada',['Q16']],['Australia',['Q408']]];
 var FAME=[['Veldig kjente',80],['Kjente',40],['Også mindre kjente',15]];
+/* SNL: nasjonalitet leses fra første setning («var en norsk forfatter …») */
+var SNL_WEST=['norsk','svensk','dansk','finsk','islandsk','amerikansk','britisk','engelsk','skotsk','walisisk','irsk','tysk','fransk','italiensk','spansk','kanadisk','australsk','newzealandsk','nederlandsk','belgisk','sveitsisk','østerriksk'];
+var SNL_CTRY=[['Alle land',[]],['Vestlige land (USA, Europa, Canada, Australia …)',SNL_WEST],['Norge',['norsk']],['Sverige',['svensk']],['Danmark',['dansk']],['Finland',['finsk']],['USA',['amerikansk']],['Storbritannia',['britisk','engelsk','skotsk','walisisk']],['Irland',['irsk']],['Tyskland',['tysk']],['Frankrike',['fransk']],['Italia',['italiensk']],['Spania',['spansk']],['Canada',['kanadisk']],['Australia',['australsk']]];
 var TR={items:[],type:'p',suggest:''};
 function selOpts(arr,def){return arr.map(function(x,i){return '<option value="'+i+'"'+(i===def?' selected':'')+'>'+esc(x[0])+'</option>'}).join('')}
 function vThemes(){
@@ -306,6 +309,8 @@ function vThemes(){
   '<div class="sec">Hvor kjente</div><select id="tfame">'+selOpts(FAME,1)+'</select></div>'+
   '<div class="src src-snl" style="display:none"><div class="sec">Søkeord (skill med komma)</div><input id="sterms" type="text" placeholder="f.eks. skuespiller, polarforsker, idrettsutøver">'+
   '<div class="sec">Artikkeltype</div><select id="snltype"><option value="2">Personer</option><option value="">Alle artikler</option></select>'+
+  '<div class="sec">Land (nasjonalitet)</div><select id="snlcty">'+selOpts(SNL_CTRY,0)+'</select>'+
+  '<div class="row"><div><div class="sec">Født fra år</div><input id="sfrom" type="tel" placeholder="ingen grense"></div><div><div class="sec">Født til år</div><input id="sto" type="tel" placeholder="ingen grense"></div></div>'+
   '<label class="chk"><input type="checkbox" id="snlimg"> Bare artikler med bilde</label></div>'+
   '<div class="src src-b" style="display:none"><div class="sec">Søkeord (skill med komma)</div><input id="bterms" type="text" placeholder="f.eks. Bergen, jernbane, skoleklasse">'+
   '<div class="row"><div><div class="sec">Fra år</div><input id="bfrom" type="tel" value="1850"></div><div><div class="sec">Til år</div><input id="bto" type="tel" value="1980"></div></div></div>'+
@@ -365,10 +370,12 @@ function maskName(s,head){
 }
 function searchSnl(terms,F){
   var reqs=[];
-  terms.forEach(function(t){for(var o=0;o<60;o+=10)reqs.push('https://snl.no/api/v1/search?query='+encodeURIComponent(t)+'&limit=10&offset='+o)});
+  terms.forEach(function(t){for(var o=0;o<120;o+=10)reqs.push('https://snl.no/api/v1/search?query='+encodeURIComponent(t)+'&limit=10&offset='+o)});
   return poolGet(reqs,4).then(function(res){
     if(res.every(function(r){return !r}))throw new Error('ingen svar fra snl.no');
-    var seen={},items=[];
+    var seen={},list=[];
+    var adj=(SNL_CTRY[F.snlcty||0]||['',[]])[1],
+        rx=adj.length?new RegExp('(^|[^A-Za-zæøåÆØÅ])('+adj.join('|')+')','i'):null;
     res.forEach(function(arr){(arr||[]).forEach(function(a){
       if(!a||seen[a.article_id]||!a.headword)return;
       if(F.snltype&&String(a.article_type_id)!==F.snltype)return;
@@ -376,12 +383,34 @@ function searchSnl(terms,F){
       if(F.snlimg&&!hasImg)return;
       var s=(a.first_sentences||'').replace(/\s+/g,' ').trim();
       if(!hasImg&&s.length<40)return;
+      if(rx&&!rx.test(s.slice(0,170)))return;
       seen[a.article_id]=1;
-      var name=a.headword+(a.clarification?' ('+a.clarification+')':'');
-      if(hasImg)items.push({k:'n',n:name,img:a.first_image_url.replace(/^http:/,'https:'),info:'Kilde: snl.no'});
-      else items.push({k:'c',n:name,clue:maskName(s,a.headword),info:'Kilde: snl.no'});
+      list.push({a:a,s:s,hasImg:hasImg});
     })});
-    return items;
+    function toItem(c){
+      var a=c.a,name=a.headword+(a.clarification?' ('+a.clarification+')':''),info=(c.y?'Født '+c.y+' · ':'')+'Kilde: snl.no',it;
+      if(c.hasImg)it={k:'n',n:name,img:a.first_image_url.replace(/^http:/,'https:'),info:info};
+      else it={k:'c',n:name,clue:maskName(c.s,a.headword),info:info};
+      if(c.y){it.y=c.y;it.g=c.g}
+      return it;
+    }
+    var yf=parseInt(F.sfrom,10),yt=parseInt(F.sto,10);
+    if(isNaN(yf)&&isNaN(yt))return list.map(toItem);
+    /* fødselsår krever artikkelens egne data (en forespørsel per artikkel) */
+    list=list.slice(0,400);
+    return poolGet(list.map(function(c){return 'https://snl.no/'+encodeURIComponent(c.a.permalink)+'.json'}),8).then(function(dets){
+      var out=[];
+      list.forEach(function(c,i){
+        var d=dets[i],m=d&&d.metadata&&String(d.metadata.birth_date||'').match(/(\d{4})/);
+        if(!m)return;
+        var y=parseInt(m[1],10);
+        if(!isNaN(yf)&&y<yf)return;
+        if(!isNaN(yt)&&y>yt)return;
+        c.y=y;c.g=d.metadata.gender==='k'?'f':(d.metadata.gender==='m'?'m':'x');
+        out.push(toItem(c));
+      });
+      return out;
+    });
   });
 }
 function searchNb(terms,from,to){
@@ -431,13 +460,13 @@ function setSrc(v){
   var show={wd:'.src-wd',snl:'.src-snl',nb:'.src-b',dimu:'.src-b,.src-d'};
   [].forEach.call(document.querySelectorAll('.src'),function(e){e.style.display='none'});
   [].forEach.call(document.querySelectorAll(show[v]),function(e){e.style.display=''});
-  var n={wd:'Data fra Wikidata. For personer brukes statsborgerskap.',snl:'Data fra snl.no (Store norske leksikon). Spørsmålene vises med bilde der artikkelen har det, ellers som tekst.',
+  var n={wd:'Data fra Wikidata. For personer brukes statsborgerskap.',snl:'Data fra snl.no (Store norske leksikon). Bilde der artikkelen har det, ellers tekst. Tips: bruk mange søkeord for flere treff. SNL er norsk, så for utenlandske skuespillere gir Wikidata flest treff.',
     nb:'Bilder fra Nasjonalbiblioteket (nb.no). Spørsmålet er «Hvilket år er bildet fra?».',dimu:'Foto fra DigitaltMuseum (digitaltmuseum.no). Krever egen API-nøkkel.'};
   var s=$('#tstat');if(s)s.textContent=n[v];
 }
 function runOther(src){
   var max=parseInt($('#tmax').value,10),btn=$('#sbtn'),st=$('#tstat'),F={src:src,max:$('#tmax').value},terms,from=0,to=3000,job;
-  if(src==='snl'){F.terms=$('#sterms').value;F.snltype=$('#snltype').value;F.snlimg=$('#snlimg').checked;terms=termsOf('#sterms')}
+  if(src==='snl'){F.terms=$('#sterms').value;F.snltype=$('#snltype').value;F.snlimg=$('#snlimg').checked;F.snlcty=$('#snlcty').value;F.sfrom=$('#sfrom').value;F.sto=$('#sto').value;terms=termsOf('#sterms')}
   else{F.terms=$('#bterms').value;F.from=$('#bfrom').value;F.to=$('#bto').value;terms=termsOf('#bterms');from=parseInt(F.from,10)||0;to=parseInt(F.to,10)||3000}
   if(!terms.length){alert('Skriv minst ett søkeord.');return}
   if(src==='dimu'){
@@ -508,7 +537,7 @@ function rerunTheme(i,noRun){
   var f=t.filters,set=function(id,v){var e=$(id);if(e&&v!=null)e.value=v};
   set('#tsrc',f.src||'wd');setSrc(f.src||'wd');
   if(f.src&&f.src!=='wd'){
-    set('#sterms',f.terms);set('#snltype',f.snltype);if($('#snlimg'))$('#snlimg').checked=!!f.snlimg;
+    set('#sterms',f.terms);set('#snltype',f.snltype);if($('#snlimg'))$('#snlimg').checked=!!f.snlimg;set('#snlcty',f.snlcty);set('#sfrom',f.sfrom);set('#sto',f.sto);
     set('#bterms',f.terms);set('#bfrom',f.from);set('#bto',f.to);set('#tmax',f.max);
   }else{
     set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
@@ -562,7 +591,7 @@ function themeQs(id){
         q={text:'Hvilket år er bildet fra?',opts:yrs.map(String),correct:yrs.indexOf(a.y),img:a.img,info:a.info||''};
         out.push(q);return;
       }
-      var same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'&&(th.type!=='p'||!a.g||a.g==='x'||b.g===a.g)});
+      var same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'&&(!a.g||a.g==='x'||b.g===a.g)});
       if(same.length<3)same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'});
       if(same.length<3)return;
       var w=shuffle(same).slice(0,3).map(function(b){return b.n});
