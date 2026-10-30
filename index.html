@@ -98,6 +98,14 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .sub{font-size:2vw!important}
 .wrap.wide .big{font-size:2.4vw}
 .wrap.wide .row{gap:1vw}
+.infopg{background:rgba(255,255,255,.12);border-radius:16px;padding:16px;text-align:left}
+.infopg .ia{font-size:26px;font-weight:800;color:#86efac;margin-bottom:8px}
+.infopg .itx{font-size:20px;line-height:1.4;margin-bottom:10px}
+.igal{display:grid;gap:10px;grid-template-columns:1fr 1fr}.igal.n1{grid-template-columns:1fr}.igal img{width:100%;max-height:34vh;object-fit:contain;border-radius:12px;background:rgba(0,0,0,.25)}
+.wrap.wide .infopg{border-radius:1.2vw;padding:1.2vw 1.6vw}
+.wrap.wide .infopg .ia{font-size:3vw;margin-bottom:.6vw}
+.wrap.wide .infopg .itx{font-size:1.9vw;margin-bottom:.8vw}
+.wrap.wide .igal{gap:1vw}.wrap.wide .igal img{max-height:24vh;border-radius:1vw}
 .ctl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr);gap:1.6vw;align-items:end;margin-top:1.2vw}
 .ctl .tabs{margin:0}
 .wrap.wide .mid>.card{padding:.7vw 1vw!important;margin:0 0 .8vw!important}
@@ -259,6 +267,10 @@ function vEditor(){
   '<input id="ew2" type="text" placeholder="Feil svar 2 (valgfritt)" value="'+esc(w[1]||'')+'">'+
   '<input id="ew3" type="text" placeholder="Feil svar 3 (valgfritt)" value="'+esc(w[2]||'')+'">'+
   '<label class="note" style="display:block;text-align:left">Bilde (valgfritt)'+(e&&e.img?' – har bilde fra før, velg nytt for å bytte':'')+'</label><input id="eimg" type="file" accept="image/*">'+
+  '<label class="note" style="display:block;text-align:left">Svarside – tekst som vises etter svaret (valgfritt)</label>'+
+  '<textarea id="einfo" rows="5" placeholder="Fortell mer om svaret …">'+esc(e?e.info||'':'')+'</textarea>'+
+  '<label class="note" style="display:block;text-align:left">Bilder til svarsiden (valgfritt, opptil 4)'+(e&&e.imgs&&e.imgs.length?' – har '+e.imgs.length+' fra før, velg nye for å bytte':'')+'</label><input id="eimgs" type="file" accept="image/*" multiple>'+
+  '<p class="note">Egne spørsmål spilles alltid som buzzer, uten nedtelling.</p>'+
   '<button class="btn" data-a="saveq">'+(e?'Lagre endringer':'Lagre spørsmål')+'</button>'+(e?'<button class="btn ghost" data-a="cancelq">Avbryt</button>':'')+'</div>';
   h+='<div class="card"><h2>Lagrede ('+own.length+')</h2>';
   if(!own.length)h+='<p class="note">Ingen ennå.</p>';
@@ -267,10 +279,10 @@ function vEditor(){
   }
   return h+'</div><p class="note">Spørsmålene lagres i nettleseren på denne enheten.</p></div></div>';
 }
-function shrink(file,cb){
+function shrink(file,cb,max){
   var url=URL.createObjectURL(file),im=new Image();
   im.onload=function(){
-    var m=560,w=im.width,hh=im.height,s=Math.min(1,m/Math.max(w,hh));
+    var m=max||560,w=im.width,hh=im.height,s=Math.min(1,m/Math.max(w,hh));
     var c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(hh*s);
     c.getContext('2d').drawImage(im,0,0,c.width,c.height);
     URL.revokeObjectURL(url);cb(c.toDataURL('image/jpeg',0.6));
@@ -282,15 +294,21 @@ function saveQ(){
   var t=$('#eq').value.trim(),c=$('#er').value.trim(),w=[];
   ['#ew1','#ew2','#ew3'].forEach(function(s){var v=$(s).value.trim();if(v)w.push(v)});
   if(!t||!c||!w.length){alert('Skriv spørsmål, riktig svar og minst ett feil svar.');return}
-  var f=$('#eimg').files[0];
+  var f=$('#eimg').files[0],info=$('#einfo').value.trim(),infoImgs=[],files=[].slice.call($('#eimgs').files,0,4);
   function done(img){
     var own=loadOwn();
-    if(editIdx>=0&&own[editIdx]){own[editIdx]={t:t,c:c,w:w,img:img||own[editIdx].img||null}}
-    else own.push({t:t,c:c,w:w,img:img||null});
+    var prev=editIdx>=0&&own[editIdx]?own[editIdx]:null;
+    var rec={t:t,c:c,w:w,img:img||(prev&&prev.img)||null,info:info,imgs:infoImgs.length?infoImgs:((prev&&prev.imgs)||[])};
+    if(prev)own[editIdx]=rec;else own.push(rec);
     if(!lsSet(OWN_KEY,JSON.stringify(own))){alert('Fikk ikke lagret (for lite plass?). Prøv et mindre bilde.');return}
     editIdx=-1;render();
   }
-  if(f)shrink(f,done);else done(null);
+  /* bilder til svarsiden krympes først, deretter spørsmålsbildet */
+  function nextInfo(i){
+    if(i>=files.length){if(f)shrink(f,done);else done(null);return}
+    shrink(files[i],function(d){if(d)infoImgs.push(d);nextInfo(i+1)},800);
+  }
+  nextInfo(0);
 }
 
 /* ===== Tema-bygger (Wikidata) ===== */
@@ -731,7 +749,7 @@ function vSetup(){
 function buildQs(cfg){
   var lists=[];
   (cfg.themes||[]).forEach(function(t){lists.push(shuffle(themeQs(t)))});
-  if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){return mkQ(o.t,o.c,o.w,o.img)}));
+  if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){var q=mkQ(o.t,o.c,o.w,o.img);q.own=true;q.info=o.info||'';q.imgs=o.imgs||[];return q}));
   cfg.cats.forEach(function(c){lists.push(shuffle(BANK[c]).map(function(r){return mkQ(r[0],r[1],r.slice(2))}))});
   var qs=[];
   while(qs.length<cfg.count&&lists.some(function(l){return l.length})){
@@ -887,7 +905,7 @@ function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   if(H.qi+1>=H.qs.length){H.phase='end'}
   else{
-    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.qStart=Date.now();H.endsAt=(H.cfg.secs&&H.qmode!=='b')?Date.now()+H.cfg.secs*1000:0;H.locked={};H.winner=null;H.queue=[];H.turn=0;
+    H.qi++;H.phase='q';H.qmode=H.qs[H.qi].own?'b':H.cfg.mode;H.qStart=Date.now();H.endsAt=(H.cfg.secs&&H.qmode!=='b')?Date.now()+H.cfg.secs*1000:0;H.locked={};H.winner=null;H.queue=[];H.turn=0;
     for(var k in H.players){H.players[k].ans=null;H.players[k].bz=0}
     if(H.endsAt)startTimer();
   }
@@ -935,13 +953,33 @@ function scoreRows(list,max){
   list.slice(0,max).forEach(function(p,i){h+='<div class="score"><span>'+(medal[i]||(i+1)+'.')+' '+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
   return h||'<p class="note">Ingen spillere.</p>';
 }
-function modeToggle(label){
+function modeToggle(label,nq){
+  if(nq&&nq.own)return '<div class="sec" style="text-align:center">'+label+'</div><div class="tabs" style="justify-content:center;padding-right:0"><span class="tab on">🔔 Buzzer – eget spørsmål spilles alltid slik</span></div>';
   return '<div class="sec" style="text-align:center">'+label+'</div><div class="tabs" style="justify-content:center;padding-right:0">'+
   '<button class="tab'+(H.cfg.mode==='a'?' on':'')+'" data-a="setmode" data-v="a">A B C D</button>'+
   '<button class="tab'+(H.cfg.mode==='b'?' on':'')+'" data-a="setmode" data-v="b">🔔 Buzzer (først til å trykke)</button></div>';
 }
 /* Nederste rad på vertsskjermen: venstre / midten / høyre, samme kolonner som resten */
 function ctlBar(l,c,r){return '<div class="ctl"><div>'+l+'</div><div>'+c+'</div><div>'+r+'</div></div>'}
+/* Svarside for egne spørsmål: riktig svar, tekst og bilder */
+function infoPage(q){
+  var imgs=(q.imgs&&q.imgs.length?q.imgs:(q.img?[q.img]:[]));
+  var h='<div class="infopg"><div class="ia">✓ '+esc(q.opts[q.correct])+'</div>';
+  if(q.info)h+='<div class="itx">'+esc(q.info).replace(/\n/g,'<br>')+'</div>';
+  if(imgs.length)h+='<div class="igal n'+Math.min(imgs.length,4)+'">'+imgs.map(function(s){return '<img src="'+s+'" alt="">'}).join('')+'</div>';
+  return h+'</div>';
+}
+/* Buzzer, fasit: alle som svarte, i rekkefølge, med ✓/✗ og poeng */
+function queueResultHtml(){
+  var h='<div class="card"><h2>Svarte</h2>';
+  H.queue.forEach(function(e,i){
+    if(i>H.turn)return;
+    var p=H.players[e.name],won=i===H.turn&&p&&p.last&&p.last.ok;
+    var mark=won?'✓':(i<H.turn?'✗':'–');
+    h+='<div class="score"><span>'+mark+' '+esc(e.name)+'</span><b>'+(i===0?'først':fmtD(e.at-H.queue[0].at))+'</b></div>';
+  });
+  return h+'</div>';
+}
 function queueHtml(){
   var h='<div class="card" style="margin-top:12px"><h2>Køen (etter hvor fort de trykket)</h2>';
   H.queue.forEach(function(e,i){
@@ -989,7 +1027,7 @@ function vHost(){
     '<div class="small">og skriv inn koden</div><div class="code">'+H.code+'</div>'+
     '<button class="btn ghost" data-a="share">Del lenke med kode</button>'+
     '<div class="chips">'+(r.length?r.map(function(p){return '<span class="chip'+(p.online?'':' off')+'">'+esc(p.name)+'</span>'}).join(''):'<span class="note">Venter på spillere…</span>')+'</div>'+
-    modeToggle('Spillmåte for første spørsmål')+
+    modeToggle('Spillmåte for første spørsmål',H.qs[0])+
     '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
     '<button class="btn red" data-a="close">Avslutt</button>';
   }else if(H.phase==='q'){
@@ -1015,13 +1053,13 @@ function vHost(){
   }else if(H.phase==='reveal'){
     var rhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     qDiv(q);
-    var rmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
+    var rmid=q.own?infoPage(q):(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
     '';
     var last=H.qi+1>=H.qs.length;
     h+=rhead+'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+rmid+'</div>'+
-      (H.qmode==='b'?gainsHtml():'<div class="card" id="times">'+timesInner(true)+'</div>')+'</div>'+
+      (H.qmode==='b'?(H.queue.length?queueResultHtml():gainsHtml()):'<div class="card" id="times">'+timesInner(true)+'</div>')+'</div>'+
       ctlBar('<button class="btn" data-a="next">'+(last?'Se sluttresultat':'Neste spørsmål')+'</button>',
-        last?'':modeToggle('Neste spørsmål spilles som'),
+        last?'':modeToggle('Neste spørsmål spilles som',H.qs[H.qi+1]),
         last?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
   }else{
     h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
