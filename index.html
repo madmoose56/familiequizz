@@ -84,6 +84,7 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .top{font-size:1.5vw;margin-bottom:.4vw}
 .wrap.wide .cd{font-size:3.4vw;min-width:5vw}
 .wrap.wide .q{font-size:3.3vw;margin:.2vw 0 1vw}
+.wrap.wide .q.long{font-size:2.2vw}
 .wrap.wide .gl{grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr);gap:1.6vw}
 .wrap.wide .gl>.card,.wrap.wide .gl>div>.card{padding:1vw 1.2vw;border-radius:1.2vw}
 .wrap.wide .gl .card h2{font-size:1.3vw;margin-bottom:.5vw;letter-spacing:.1vw}
@@ -119,7 +120,9 @@ label.chk input{width:22px;height:22px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px;max-height:55vh;overflow:auto}
 .gi{position:relative;background:rgba(255,255,255,.1);border-radius:10px;overflow:hidden;font-size:13px;text-align:center}
 .gi img{width:100%;height:110px;object-fit:cover;display:block}
-.gi span{display:block;padding:4px}
+.gi span{display:block;padding:4px;max-height:5.4em;overflow:hidden}
+.gi .clue{height:110px;padding:6px;font-size:11px;overflow:hidden;opacity:.85;text-align:left}
+.q.long{font-size:20px}
 .gi .x{position:absolute;top:4px;right:4px;padding:2px 8px}
 #errBox{display:none;position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;padding:10px;font-size:13px;z-index:9}
 </style>
@@ -294,19 +297,26 @@ var TR={items:[],type:'p',suggest:''};
 function selOpts(arr,def){return arr.map(function(x,i){return '<option value="'+i+'"'+(i===def?' selected':'')+'>'+esc(x[0])+'</option>'}).join('')}
 function vThemes(){
   var h='<div class="wrap">'+adminTabs('themes')+'<div class="cols"><div class="card"><h2>Nytt tema – tilpass søket</h2>'+
-  '<div class="sec">Type</div><select id="ttype"><option value="p">Personer – «Hvem er dette?»</option><option value="l">Landemerker – «Hva heter dette?»</option></select>'+
+  '<div class="sec">Kilde</div><select id="tsrc"><option value="wd">Wikidata – personer og steder med bilde</option><option value="snl">SNL – Store norske leksikon (personer, begreper, hendelser)</option><option value="nb">Nasjonalbiblioteket – historiske bilder (gjett året)</option><option value="dimu">DigitaltMuseum – historiske foto (krever API-nøkkel)</option></select>'+
+  '<div class="src src-wd"><div class="sec">Type</div><select id="ttype"><option value="p">Personer – «Hvem er dette?»</option><option value="l">Landemerker – «Hva heter dette?»</option></select>'+
   '<div id="tpers"><div class="sec">Yrke</div><select id="tocc">'+selOpts(OCC,0)+'</select>'+
   '<div class="sec">Kjønn</div><select id="tgen"><option value="">Alle</option><option value="Q6581072">Kvinner</option><option value="Q6581097">Menn</option></select>'+
   '<div class="row"><div><div class="sec">Født fra år</div><input id="tfrom" type="tel" value="1961"></div><div><div class="sec">Født til år</div><input id="tto" type="tel" value="2010"></div></div></div>'+
   '<div class="sec">Land</div><select id="tcty">'+selOpts(CTRY,1)+'</select>'+
-  '<div class="sec">Hvor kjente</div><select id="tfame">'+selOpts(FAME,1)+'</select>'+
-  '<div class="sec">Maks antall</div><select id="tmax"><option>20</option><option selected>40</option><option>60</option></select>'+
+  '<div class="sec">Hvor kjente</div><select id="tfame">'+selOpts(FAME,1)+'</select></div>'+
+  '<div class="src src-snl" style="display:none"><div class="sec">Søkeord (skill med komma)</div><input id="sterms" type="text" placeholder="f.eks. skuespiller, polarforsker, idrettsutøver">'+
+  '<div class="sec">Artikkeltype</div><select id="snltype"><option value="2">Personer</option><option value="">Alle artikler</option></select>'+
+  '<label class="chk"><input type="checkbox" id="snlimg"> Bare artikler med bilde</label></div>'+
+  '<div class="src src-b" style="display:none"><div class="sec">Søkeord (skill med komma)</div><input id="bterms" type="text" placeholder="f.eks. Bergen, jernbane, skoleklasse">'+
+  '<div class="row"><div><div class="sec">Fra år</div><input id="bfrom" type="tel" value="1850"></div><div><div class="sec">Til år</div><input id="bto" type="tel" value="1980"></div></div></div>'+
+  '<div class="src src-d" style="display:none"><div class="sec">DigitaltMuseum API-nøkkel</div><input id="dkey" type="text" placeholder="Lim inn nøkkelen din" value="'+esc(lsGet('fq-dimukey',''))+'"></div>'+
+  '<div class="sec">Maks antall</div><select id="tmax"><option>20</option><option selected>40</option><option>60</option><option>100</option></select>'+
   '<button class="btn" data-a="search" id="sbtn">Søk</button><p class="note" id="tstat">Data fra Wikidata. For personer brukes statsborgerskap.</p></div>'+
   '<div><div class="card"><h2>Resultat</h2><div id="tres"><p class="note">Ingen søk ennå.</p></div></div>';
   var ts=loadThemes();
   h+='<div class="card"><h2>Mine temaer ('+ts.length+')</h2>';
   if(!ts.length)h+='<p class="note">Ingen ennå.</p>';
-  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+(t.type==='p'?' personer':' steder')+'</small></span>'+(t.filters?'<button class="x" data-a="edittheme" data-i="'+i+'">Rediger søk</button><button class="x" data-a="rerun" data-i="'+i+'">Kjør på nytt</button>':'')+'<button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
+  ts.forEach(function(t,i){h+='<div class="qrow"><span>'+esc(t.name)+'<br><small>'+t.items.length+typeLabel(t)+'</small></span>'+(t.filters?'<button class="x" data-a="edittheme" data-i="'+i+'">Rediger søk</button><button class="x" data-a="rerun" data-i="'+i+'">Kjør på nytt</button>':'')+'<button class="x" data-a="deltheme" data-i="'+i+'">Slett</button></div>'});
   return h+'</div></div></div></div>';
 }
 function renderRes(){
@@ -314,7 +324,11 @@ function renderRes(){
   var old=$('#tname');if(old)TR.suggest=old.value;
   if(!TR.items.length){el.innerHTML='<p class="note">Ingen treff. Prøv å senke «Hvor kjente» eller utvide årene.</p>';return}
   var h='<p class="note" style="text-align:left">Fjern treff med dårlig bilde eller feil person med ✕.</p><div class="grid">';
-  TR.items.forEach(function(it,i){h+='<div class="gi"><img src="'+esc(it.img)+'" alt=""><span>'+esc(it.n)+(it.y?'<br><small>f. '+it.y+'</small>':'')+'</span><button class="x" data-a="rmres" data-i="'+i+'">✕</button></div>'});
+  TR.items.forEach(function(it,i){
+    var vis=it.img?'<img src="'+esc(it.img)+'" alt="">':'<div class="clue">'+esc((it.clue||'').slice(0,90))+'…</div>';
+    var sub=it.k==='y'?'<br><small>'+it.y+'</small>':(it.y?'<br><small>f. '+it.y+'</small>':'');
+    h+='<div class="gi">'+vis+'<span>'+esc(it.n)+sub+'</span><button class="x" data-a="rmres" data-i="'+i+'">✕</button></div>';
+  });
   var rep=false;loadThemes().forEach(function(t){if(t.id===TR.replaceId)rep=true});
   el.innerHTML=h+'</div><input id="tname" type="text" placeholder="Navn på temaet" value="'+esc(TR.suggest)+'">'+
   (rep?'<button class="btn" data-a="savetheme">Oppdater temaet ('+TR.items.length+')</button><button class="btn ghost" data-a="savenew">Lagre som nytt tema</button>'
@@ -327,7 +341,120 @@ function wdQuery(q,ms){
     clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
   },function(e){clearTimeout(t);throw e});
 }
+/* ===== Andre kilder: SNL, Nasjonalbiblioteket, DigitaltMuseum ===== */
+function getJson(url,ms){
+  var c=new AbortController(),t=setTimeout(function(){c.abort()},ms||30000);
+  return fetch(url,{signal:c.signal}).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()},function(e){clearTimeout(t);throw e});
+}
+function poolGet(urls,n){
+  return new Promise(function(resolve){
+    var out=new Array(urls.length),i=0,done=0;
+    if(!urls.length)return resolve([]);
+    function nx(){
+      if(i>=urls.length)return;var k=i++;
+      getJson(urls[k],30000).then(function(j){out[k]=j},function(){out[k]=null}).then(function(){done++;if(done===urls.length)resolve(out);else nx()});
+    }
+    for(var w=0;w<Math.min(n,urls.length);w++)nx();
+  });
+}
+function termsOf(id){return ($(id).value||'').split(',').map(function(s){return s.trim()}).filter(Boolean)}
+function yearOf(s){var m=String(s||'').match(/\b(1[0-9]{3}|20[0-2][0-9])\b/);return m?parseInt(m[1],10):null}
+function maskName(s,head){
+  head.split(/[\s,]+/).filter(function(w){return w.length>2}).forEach(function(w){s=s.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),'…')});
+  return s.length>230?s.slice(0,227)+'…':s;
+}
+function searchSnl(terms,F){
+  var reqs=[];
+  terms.forEach(function(t){for(var o=0;o<60;o+=10)reqs.push('https://snl.no/api/v1/search?query='+encodeURIComponent(t)+'&limit=10&offset='+o)});
+  return poolGet(reqs,4).then(function(res){
+    if(res.every(function(r){return !r}))throw new Error('ingen svar fra snl.no');
+    var seen={},items=[];
+    res.forEach(function(arr){(arr||[]).forEach(function(a){
+      if(!a||seen[a.article_id]||!a.headword)return;
+      if(F.snltype&&String(a.article_type_id)!==F.snltype)return;
+      var hasImg=!!a.first_image_url;
+      if(F.snlimg&&!hasImg)return;
+      var s=(a.first_sentences||'').replace(/\s+/g,' ').trim();
+      if(!hasImg&&s.length<40)return;
+      seen[a.article_id]=1;
+      var name=a.headword+(a.clarification?' ('+a.clarification+')':'');
+      if(hasImg)items.push({k:'n',n:name,img:a.first_image_url.replace(/^http:/,'https:'),info:'Kilde: snl.no'});
+      else items.push({k:'c',n:name,clue:maskName(s,a.headword),info:'Kilde: snl.no'});
+    })});
+    return items;
+  });
+}
+function searchNb(terms,from,to){
+  var reqs=[];
+  terms.forEach(function(t){for(var p=0;p<6;p++)reqs.push('https://api.nb.no/catalog/v1/items?q='+encodeURIComponent(t)+'&filter=mediatype:bilder&size=50&page='+p)});
+  return poolGet(reqs,4).then(function(res){
+    if(res.every(function(r){return !r}))throw new Error('ingen svar fra nb.no');
+    var seen={},items=[];
+    res.forEach(function(d){
+      if(!d||!d._embedded||!d._embedded.items)return;
+      d._embedded.items.forEach(function(it){
+        var m=it.metadata||{},ai=it.accessInfo||{};
+        if(ai.accessAllowedFrom&&ai.accessAllowedFrom!=='EVERYWHERE')return;
+        var y=yearOf(m.dateCreated);
+        if(!y||y<from||y>to)return;
+        var title=String(m.title||'').replace(/\s*\[bilde[^\]]*\]\s*/i,' ').replace(/\s+/g,' ').trim();
+        if(title.length<8||/^\[/.test(title)||seen[title.toLowerCase()])return;
+        seen[title.toLowerCase()]=1;
+        var th=it._links&&(it._links.thumbnail_large||it._links.thumbnail_medium);
+        if(!th)return;
+        items.push({k:'y',y:y,n:title,img:th.href.replace(/\/full\/0,\d+\//,'/full/0,560/'),info:title+(m.creators&&m.creators.length?' · '+m.creators[0]:'')+' · nb.no'});
+      });
+    });
+    return items;
+  });
+}
+function searchDimu(terms,from,to,key){
+  var reqs=[];
+  terms.forEach(function(t){for(var s=0;s<300;s+=100)reqs.push('https://api.dimu.org/api/solr/select?q='+encodeURIComponent(t)+'&wt=json&rows=100&start='+s+
+    '&fq='+encodeURIComponent('artifact.hasPictures:true')+'&fq='+encodeURIComponent('artifact.ingress.production.fromYear:['+from+' TO '+to+']')+'&api.key='+encodeURIComponent(key))});
+  return poolGet(reqs,3).then(function(res){
+    if(res.every(function(r){return !r}))throw new Error('ingen svar fra DigitaltMuseum – sjekk API-nøkkelen');
+    var seen={},items=[];
+    res.forEach(function(d){
+      var docs=d&&d.response&&d.response.docs||[];
+      docs.forEach(function(x){
+        var id=x['artifact.defaultMediaIdentifier'],title=x['artifact.ingress.title'],y=parseInt(x['artifact.ingress.production.fromYear'],10);
+        if(!id||!title||!y||seen[id])return;
+        seen[id]=1;
+        items.push({k:'y',y:y,n:title,img:'https://ems.dimu.org/image/'+id+'?dimension=800x800',info:title+' · digitaltmuseum.no'});
+      });
+    });
+    return items;
+  });
+}
+function setSrc(v){
+  var show={wd:'.src-wd',snl:'.src-snl',nb:'.src-b',dimu:'.src-b,.src-d'};
+  [].forEach.call(document.querySelectorAll('.src'),function(e){e.style.display='none'});
+  [].forEach.call(document.querySelectorAll(show[v]),function(e){e.style.display=''});
+  var n={wd:'Data fra Wikidata. For personer brukes statsborgerskap.',snl:'Data fra snl.no (Store norske leksikon). Spørsmålene vises med bilde der artikkelen har det, ellers som tekst.',
+    nb:'Bilder fra Nasjonalbiblioteket (nb.no). Spørsmålet er «Hvilket år er bildet fra?».',dimu:'Foto fra DigitaltMuseum (digitaltmuseum.no). Krever egen API-nøkkel.'};
+  var s=$('#tstat');if(s)s.textContent=n[v];
+}
+function runOther(src){
+  var max=parseInt($('#tmax').value,10),btn=$('#sbtn'),st=$('#tstat'),F={src:src,max:$('#tmax').value},terms,from=0,to=3000,job;
+  if(src==='snl'){F.terms=$('#sterms').value;F.snltype=$('#snltype').value;F.snlimg=$('#snlimg').checked;terms=termsOf('#sterms')}
+  else{F.terms=$('#bterms').value;F.from=$('#bfrom').value;F.to=$('#bto').value;terms=termsOf('#bterms');from=parseInt(F.from,10)||0;to=parseInt(F.to,10)||3000}
+  if(!terms.length){alert('Skriv minst ett søkeord.');return}
+  if(src==='dimu'){
+    var key=$('#dkey').value.trim();
+    if(!key){alert('DigitaltMuseum trenger en API-nøkkel.');return}
+    lsSet('fq-dimukey',key);job=searchDimu(terms,from,to,key);
+  }else job=src==='snl'?searchSnl(terms,F):searchNb(terms,from,to);
+  btn.disabled=true;st.textContent='Søker …';
+  job.then(function(items){
+    TR.items=(src==='snl'?items:shuffle(items)).slice(0,max);TR.type='x';TR.filters=F;
+    st.textContent=TR.items.length+' treff funnet.';btn.disabled=false;renderRes();
+  },function(e){
+    st.textContent='Søket feilet ('+(e&&e.message||e)+'). Prøv igjen.';btn.disabled=false;
+  });
+}
 function runSearch(){
+  if($('#tsrc').value!=='wd'){runOther($('#tsrc').value);return}
   var type=$('#ttype').value,fame=FAME[$('#tfame').value][1],max=parseInt($('#tmax').value,10),c=CTRY[$('#tcty').value][1];
   var occ=OCC[$('#tocc').value][1],from=parseInt($('#tfrom').value,10)||1900,to=parseInt($('#tto').value,10)||2100,g=$('#tgen').value;
   var types=['Q570116','Q4989906','Q16560','Q2977','Q12280','Q11303','Q23413','Q44539','Q32815','Q16970','Q179700','Q33506','Q839954'];
@@ -379,8 +506,14 @@ function runSearch(){
 function rerunTheme(i,noRun){
   var t=loadThemes()[i];if(!t||!t.filters)return;
   var f=t.filters,set=function(id,v){var e=$(id);if(e&&v!=null)e.value=v};
-  set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
-  set('#tocc',f.occ);set('#tgen',f.gen);set('#tfrom',f.from);set('#tto',f.to);set('#tcty',f.cty);set('#tfame',f.fame);set('#tmax',f.max);
+  set('#tsrc',f.src||'wd');setSrc(f.src||'wd');
+  if(f.src&&f.src!=='wd'){
+    set('#sterms',f.terms);set('#snltype',f.snltype);if($('#snlimg'))$('#snlimg').checked=!!f.snlimg;
+    set('#bterms',f.terms);set('#bfrom',f.from);set('#bto',f.to);set('#tmax',f.max);
+  }else{
+    set('#ttype',f.type);$('#tpers').style.display=f.type==='p'?'':'none';
+    set('#tocc',f.occ);set('#tgen',f.gen);set('#tfrom',f.from);set('#tto',f.to);set('#tcty',f.cty);set('#tfame',f.fame);set('#tmax',f.max);
+  }
   TR.replaceId=t.id;TR.suggest=t.name;
   window.scrollTo(0,0);
   if(noRun){var s=$('#tstat');if(s)s.textContent='Filtrene fra «'+t.name+'» er satt inn. Endre dem og trykk Søk. Du kan så lagre som nytt tema med nytt navn.';return}
@@ -400,10 +533,12 @@ function saveTheme(asNew){
 
 /* ===== Oppsett ===== */
 var THEMES=[['skuespillere','Skuespillere (bilde) – vestlige, født etter 1960'],['byer','Byer (bilde av kjent landemerke)']];
+function typeLabel(t){return t.type==='p'?' personer':(t.type==='l'?' steder':' spørsmål')}
+function qDiv(q){return '<div class="q'+(q.text.length>110?' long':'')+'">'+esc(q.text)+'</div>'}
 function loadThemes(){try{return JSON.parse(lsGet('fq-temaer','[]'))||[]}catch(e){return[]}}
 function allThemes(){
   var a=THEMES.slice();
-  loadThemes().forEach(function(t){a.push(['u:'+t.id,t.name+' ('+t.items.length+(t.type==='p'?' personer':' steder')+')'])});
+  loadThemes().forEach(function(t){a.push(['u:'+t.id,t.name+' ('+t.items.length+typeLabel(t)+')'])});
   return a;
 }
 function adminTabs(a){
@@ -418,11 +553,22 @@ function themeQs(id){
     var th=loadThemes().filter(function(t){return 'u:'+t.id===id})[0];
     if(!th||th.items.length<4)return out;
     th.items.forEach(function(a){
-      var same=th.items.filter(function(b){return b!==a&&(th.type!=='p'||!a.g||a.g==='x'||b.g===a.g)});
-      if(same.length<3)same=th.items.filter(function(b){return b!==a});
+      var k=a.k||'n',q;
+      if(k==='y'){
+        var offs=shuffle([-30,-20,-14,-10,-7,-5,-3,3,5,7,10,14,20,30]),yrs=[a.y],now=new Date().getFullYear();
+        for(var oi=0;oi<offs.length&&yrs.length<4;oi++){var v=a.y+offs[oi];if(v>now||v<1000)continue;yrs.push(v)}
+        if(yrs.length<4)return;
+        yrs.sort(function(x,z){return x-z});
+        q={text:'Hvilket år er bildet fra?',opts:yrs.map(String),correct:yrs.indexOf(a.y),img:a.img,info:a.info||''};
+        out.push(q);return;
+      }
+      var same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'&&(th.type!=='p'||!a.g||a.g==='x'||b.g===a.g)});
+      if(same.length<3)same=th.items.filter(function(b){return b!==a&&b.n!==a.n&&(b.k||'n')!=='y'});
+      if(same.length<3)return;
       var w=shuffle(same).slice(0,3).map(function(b){return b.n});
-      var q=mkQ(th.type==='p'?'Hvem er personen på bildet?':'Hva heter dette stedet?',a.n,w,a.img);
-      if(a.y)q.info='Født '+a.y;
+      var text=k==='c'?'Hvem eller hva beskrives? «'+a.clue+'»':(th.type==='p'?'Hvem er personen på bildet?':(th.type==='l'?'Hva heter dette stedet?':'Hvem eller hva er dette?'));
+      q=mkQ(text,a.n,w,k==='c'?null:a.img);
+      q.info=a.info||(a.y&&th.type==='p'?'Født '+a.y:'');
       out.push(q);
     });
     return out;
@@ -718,7 +864,7 @@ function vHost(){
     '<button class="btn red" data-a="close">Avslutt</button>';
   }else if(H.phase==='q'){
     var qhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
-    '<div class="q">'+esc(q.text)+'</div>';
+    qDiv(q);
     var qmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
     (H.qmode==='b'
       ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
@@ -730,7 +876,7 @@ function vHost(){
   }else if(H.phase==='buzz'){
     var cur=H.queue[H.turn];
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
-    '<div class="q">'+esc(q.text)+'</div>'+
+    qDiv(q)+
     '<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+
     '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+' – svarer A–D på mobilen</p></div>'+
     (q.img?'<img class="qimg" style="max-height:28vh" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
@@ -739,7 +885,7 @@ function vHost(){
     '<button class="btn red" data-a="finish">Avslutt quizen nå</button></div></div>'+queueHtml()+'</div>';
   }else if(H.phase==='reveal'){
     var rhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
-    '<div class="q">'+esc(q.text)+'</div>';
+    qDiv(q);
     var rmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
     (H.qi+1>=H.qs.length?'':modeToggle('Neste spørsmål spilles som'))+
     '<div class="row"><button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
@@ -923,6 +1069,7 @@ app.addEventListener('click',function(e){
 });
 
 app.addEventListener('change',function(e){
+  if(e.target.id==='tsrc')setSrc(e.target.value);
   if(e.target.id==='ttype'){$('#tpers').style.display=e.target.value==='p'?'':'none';$('#tfame').value=e.target.value==='p'?'1':'2'}
 });
 $('#refreshBtn').addEventListener('click',function(){
