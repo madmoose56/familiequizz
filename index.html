@@ -648,7 +648,8 @@ function vSetup(){
   '<div class="sec">Vanlige kategorier</div>';
   for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
   h+='</div><div><div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[10,15,20,25,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
-  '<div><h2>Sekunder</h2><select id="ssecs">'+[10,15,20,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div></div>'+
+  '<div><h2>Tid per spørsmål</h2><select id="ssecs">'+[10,15,20,30,60].map(function(n){return '<option value="'+n+'"'+(n===20?' selected':'')+'>'+n+' sek</option>'}).join('')+'<option value="0">Ubegrenset</option></select></div></div>'+
+  '<p class="note">Ubegrenset: ingen nedtelling. Spørsmålet står til alle har svart, eller til du trykker «Vis fasit nå». Fartspoengene regnes da ut fra 30 sekunder.</p>'+
   '<div class="sec">Spillmåte</div><select id="smode"><option value="a">Alle svarer samtidig – poeng for fart</option><option value="b">Buzzer – først til å trykke får svare</option></select>'+
   '<p class="note">Buzzer: alle trykker BUZZ. Den som er først får svare A–D på sin mobil (10 sekunder). De andre havner i kø etter hvor fort de trykket, og er svaret feil går turen til neste. Riktig gir +500, feil gir −100. «Sekunder» er tiden noen har på å trykke.</p>'+
   '<p class="note">Spørsmålene fordeles jevnt mellom temaene du velger.</p></div>'+
@@ -720,7 +721,7 @@ function hostMsg(conn,m){
     if(!bp||H.qmode!=='b'||(H.phase!=='q'&&H.phase!=='buzz')||H.locked[bp.name])return;
     for(var bi=0;bi<H.queue.length;bi++)if(H.queue[bi].name===bp.name)return;
     H.queue.push({name:bp.name,at:Date.now()});
-    if(H.phase==='q'){H.left=Math.max(0,H.endsAt-Date.now());H.phase='buzz';H.turn=0;startAnswerTimer()}
+    if(H.phase==='q'){H.left=H.endsAt?Math.max(0,H.endsAt-Date.now()):0;H.phase='buzz';H.turn=0;startAnswerTimer()}
     broadcast();render();
   }else if(m.t==='ans'){
     var pl=H.players[conn._name];
@@ -731,8 +732,8 @@ function hostMsg(conn,m){
       hostTurnResult((m.c|0)===H.qs[H.qi].correct,false);return;
     }
     if(H.phase!=='q'||pl.ans)return;
-    var c=m.c|0,q=H.qs[H.qi],left=Math.max(0,H.endsAt-Date.now()),ok=c===q.correct;
-    pl.ans={c:c,ok:ok,ms:H.cfg.secs*1000-left,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
+    var c=m.c|0,q=H.qs[H.qi],ms=Date.now()-H.qStart,ok=c===q.correct,span=(H.cfg.secs||30)*1000;
+    pl.ans={c:c,ok:ok,ms:ms,gain:ok?500+Math.round(500*Math.max(0,1-ms/span)):0};
     conn.send({t:'a',c:c});
     refreshHost();
     if(allAnswered())hostReveal();
@@ -753,6 +754,8 @@ function checkBuzzEnd(){
   if(o.length&&o.every(function(p){return H.locked[p.name]})){hostReveal();return true}
   return false;
 }
+function cdNow(){return(H.phase==='q'&&!H.cfg.secs)?'∞':Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)}
+function pcd(){return P.end?Math.ceil(Math.max(0,P.end-Date.now())/1000):'∞'}
 function startTimer(){
   if(H.timer)clearInterval(H.timer);
   H.timer=setInterval(function(){
@@ -779,7 +782,7 @@ function hostTurnResult(ok,timedOut){
   /* køen er tom: åpne buzzerne igjen for de som ikke har prøvd */
   H.queue=[];H.turn=0;H.phase='q';
   if(checkBuzzEnd())return;
-  H.endsAt=Date.now()+Math.max(H.left,5000);startTimer();
+  if(H.cfg.secs){H.endsAt=Date.now()+Math.max(H.left,5000);startTimer()}else H.endsAt=0;
   broadcast();render();
 }
 function fmtD(ms){return '+'+(ms/1000).toFixed(2).replace('.',',')+' s'}
@@ -787,11 +790,11 @@ function stateFor(p){
   var q=H.qs[H.qi],r=ranked();
   function top(n){return r.slice(0,n).map(function(x){return {name:x.name,score:x.score}})}
   if(H.phase==='lobby')return {t:'s',ph:'lobby',n:r.length};
-  if(H.phase==='q')return {t:'s',ph:'q',b:H.qmode==='b',locked:!!H.locked[p.name],i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:Math.max(0,H.endsAt-Date.now()),ans:p.ans?p.ans.c:null};
+  if(H.phase==='q')return {t:'s',ph:'q',b:H.qmode==='b',locked:!!H.locked[p.name],i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,img:q.img,left:H.endsAt?Math.max(0,H.endsAt-Date.now()):null,ans:p.ans?p.ans.c:null};
   if(H.phase==='buzz'){
     var cur=H.queue[H.turn],first=H.queue[0],pos=-1,d=0,you=cur.name===p.name;
     H.queue.forEach(function(e,i){if(e.name===p.name){pos=i;d=e.at-first.at}});
-    return {t:'s',ph:'buzz',b:true,i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,opts:you?q.opts:null,who:cur.name,you:you,pos:pos,turn:H.turn,d:d,locked:!!H.locked[p.name],left:Math.max(0,H.endsAt-Date.now()),
+    return {t:'s',ph:'buzz',b:true,i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,opts:you?q.opts:null,who:cur.name,you:you,pos:pos,turn:H.turn,d:d,locked:!!H.locked[p.name],left:H.endsAt?Math.max(0,H.endsAt-Date.now()):null,
       queue:H.queue.map(function(e){return {name:e.name,d:e.at-first.at}})};
   }
   if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
@@ -811,9 +814,9 @@ function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   if(H.qi+1>=H.qs.length){H.phase='end'}
   else{
-    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.endsAt=Date.now()+H.cfg.secs*1000;H.locked={};H.winner=null;H.queue=[];H.turn=0;
+    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.qStart=Date.now();H.endsAt=H.cfg.secs?Date.now()+H.cfg.secs*1000:0;H.locked={};H.winner=null;H.queue=[];H.turn=0;
     for(var k in H.players){H.players[k].ans=null;H.players[k].bz=0}
-    startTimer();
+    if(H.cfg.secs)startTimer();
   }
   broadcast();render();
 }
@@ -915,7 +918,7 @@ function vHost(){
     '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
     '<button class="btn red" data-a="close">Avslutt</button>';
   }else if(H.phase==='q'){
-    var qhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
+    var qhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+cdNow()+'</span></div>'+
     qDiv(q);
     var qmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
     (H.qmode==='b'
@@ -927,7 +930,7 @@ function vHost(){
       (H.qmode==='b'?'<div class="card"><h2>Køen</h2><p class="note">Ingen har trykket ennå</p></div>':'<div class="card" id="times">'+timesInner(false)+'</div>')+'</div>';
   }else if(H.phase==='buzz'){
     var cur=H.queue[H.turn];
-    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
+    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+cdNow()+'</span></div>'+
     qDiv(q)+
     '<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+
     '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+' – svarer A–D på mobilen</p></div>'+
@@ -1004,10 +1007,10 @@ function playerMsg(m){
     if(m.ph==='q'||m.ph==='buzz'){
       if(m.ph==='q'){P.buzzed=false;P.chosen=m.ans}
       else{var tk=m.i+':'+m.who;if(tk!==P.turnKey){P.turnKey=tk;P.chosen=null}}
-      P.end=Date.now()+m.left;
+      P.end=m.left==null?0:Date.now()+m.left;
       if(P.tick)clearInterval(P.tick);
       P.tick=setInterval(function(){
-        var e=$('#pcd');if(e)e.textContent=Math.ceil(Math.max(0,P.end-Date.now())/1000);
+        var e=$('#pcd');if(e)e.textContent=pcd();
       },250);
     }else if(P.tick){clearInterval(P.tick);P.tick=null}
     render();
@@ -1037,7 +1040,7 @@ function vPlayer(){
     h+='<h1>Hei, '+esc(P.name)+'!</h1><p class="sub">'+(s?'Du er med. Venter på at verten starter quizen…':'Kobler til…')+'</p>'+
     (s?'<p class="note">'+s.n+' spiller'+(s.n===1?'':'e')+' i rommet</p>':'');
   }else if(s.ph==='q'){
-    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+Math.ceil(Math.max(0,P.end-Date.now())/1000)+'</span></div>'+
+    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+pcd()+'</span></div>'+
     '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'');
     if(s.b){
       h+=s.locked?'<div class="buzzmsg">Du er ute på dette spørsmålet</div>'
@@ -1051,7 +1054,7 @@ function vPlayer(){
     }
     h+='</div>'+(P.chosen!=null?'<p class="big" style="font-size:22px">Svar sendt ✓</p><p class="note">Venter på de andre…</p>':'');
   }else if(s.ph==='buzz'){
-    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+Math.ceil(Math.max(0,P.end-Date.now())/1000)+'</span></div>'+
+    h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+pcd()+'</span></div>'+
     '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'');
     if(s.you){
       h+='<div class="buzzmsg win">'+(s.pos===0?'✅ Du trykket først!':'✅ Nå er det din tur!')+'<br><small>Velg riktig svar</small></div><div class="opts">';
