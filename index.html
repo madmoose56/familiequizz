@@ -723,7 +723,7 @@ function vSetup(){
   '<div><h2>Tid per spørsmål</h2><select id="ssecs">'+[10,15,20,30,60].map(function(n){return '<option value="'+n+'"'+(n===20?' selected':'')+'>'+n+' sek</option>'}).join('')+'<option value="0">Ubegrenset</option></select></div></div>'+
   '<p class="note">Ubegrenset: ingen nedtelling. Spørsmålet står til alle har svart, eller til du trykker «Vis fasit nå». Fartspoengene regnes da ut fra 30 sekunder.</p>'+
   '<div class="sec">Spillmåte</div><select id="smode"><option value="a">Alle svarer samtidig – poeng for fart</option><option value="b">Buzzer – først til å trykke får svare</option></select>'+
-  '<p class="note">Buzzer: alle trykker BUZZ. Den som er først får svare A–D på sin mobil (10 sekunder). De andre havner i kø etter hvor fort de trykket, og er svaret feil går turen til neste. Riktig gir +500, feil gir −100. «Sekunder» er tiden noen har på å trykke.</p>'+
+  '<p class="note">Buzzer: alle trykker BUZZ. Den som er først får svare A–D på sin mobil, uten nedtelling (bruk «Hopp over» hvis noen blir sittende). De andre havner i kø etter hvor fort de trykket, og er svaret feil går turen til neste. Riktig gir +500, feil gir −100. «Sekunder» gjelder bare ABCD-spørsmål.</p>'+
   '<p class="note">Spørsmålene fordeles jevnt mellom temaene du velger.</p></div>'+
   '<button class="btn" data-a="open" id="openbtn">Åpne rom</button></div></div></div>';
   return h;
@@ -826,8 +826,8 @@ function checkBuzzEnd(){
   if(o.length&&o.every(function(p){return H.locked[p.name]})){hostReveal();return true}
   return false;
 }
-function cdNow(){return(H.phase==='q'&&!H.cfg.secs)?'∞':Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)}
-function pcd(){return P.end?Math.ceil(Math.max(0,P.end-Date.now())/1000):'∞'}
+function cdNow(){return H.qmode==='b'?'':(H.phase==='q'&&!H.cfg.secs)?'∞':Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)}
+function pcd(){return P.st&&P.st.b?'':P.end?Math.ceil(Math.max(0,P.end-Date.now())/1000):'∞'}
 function startTimer(){
   if(H.timer)clearInterval(H.timer);
   H.timer=setInterval(function(){
@@ -837,7 +837,8 @@ function startTimer(){
   },250);
 }
 var ANS_MS=10000;
-function startAnswerTimer(){H.endsAt=Date.now()+ANS_MS;startTimer()}
+/* Buzzer: ingen nedtelling. Verten bruker «Hopp over» hvis noen blir sittende. */
+function startAnswerTimer(){if(H.timer){clearInterval(H.timer);H.timer=null}H.endsAt=0}
 /* Buzzer: spilleren som har tur har svart (ok) eller gått tom for tid (timedOut). */
 function hostTurnResult(ok,timedOut){
   if(H.phase!=='buzz')return;
@@ -854,7 +855,7 @@ function hostTurnResult(ok,timedOut){
   /* køen er tom: åpne buzzerne igjen for de som ikke har prøvd */
   H.queue=[];H.turn=0;H.phase='q';
   if(checkBuzzEnd())return;
-  if(H.cfg.secs){H.endsAt=Date.now()+Math.max(H.left,5000);startTimer()}else H.endsAt=0;
+  H.endsAt=0;
   broadcast();render();
 }
 function fmtD(ms){return '+'+(ms/1000).toFixed(2).replace('.',',')+' s'}
@@ -886,9 +887,9 @@ function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   if(H.qi+1>=H.qs.length){H.phase='end'}
   else{
-    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.qStart=Date.now();H.endsAt=H.cfg.secs?Date.now()+H.cfg.secs*1000:0;H.locked={};H.winner=null;H.queue=[];H.turn=0;
+    H.qi++;H.phase='q';H.qmode=H.cfg.mode;H.qStart=Date.now();H.endsAt=(H.cfg.secs&&H.qmode!=='b')?Date.now()+H.cfg.secs*1000:0;H.locked={};H.winner=null;H.queue=[];H.turn=0;
     for(var k in H.players){H.players[k].ans=null;H.players[k].bz=0}
-    if(H.cfg.secs)startTimer();
+    if(H.endsAt)startTimer();
   }
   broadcast();render();
 }
