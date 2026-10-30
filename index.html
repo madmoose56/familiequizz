@@ -98,6 +98,7 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .sub{font-size:2vw!important}
 .wrap.wide .big{font-size:2.4vw}
 .wrap.wide .row{gap:1vw}
+.btn.ok{background:#22c55e;color:#04290f}
 .infopg{background:rgba(255,255,255,.12);border-radius:16px;padding:16px;text-align:left}
 .infopg .ia{font-size:26px;font-weight:800;color:#86efac;margin-bottom:8px}
 .infopg .itx{font-size:20px;line-height:1.4;margin-bottom:10px}
@@ -263,14 +264,11 @@ function vEditor(){
   h+='<div class="card"><h2>'+(e?'Rediger spørsmål':'Nytt spørsmål')+'</h2>'+
   '<textarea id="eq" rows="2" placeholder="Spørsmålet, f.eks. Hvem er dette på bildet?">'+esc(e?e.t:'')+'</textarea>'+
   '<input id="er" type="text" placeholder="Riktig svar" value="'+esc(e?e.c:'')+'">'+
-  '<input id="ew1" type="text" placeholder="Feil svar 1" value="'+esc(w[0]||'')+'">'+
-  '<input id="ew2" type="text" placeholder="Feil svar 2 (valgfritt)" value="'+esc(w[1]||'')+'">'+
-  '<input id="ew3" type="text" placeholder="Feil svar 3 (valgfritt)" value="'+esc(w[2]||'')+'">'+
   '<label class="note" style="display:block;text-align:left">Bilde (valgfritt)'+(e&&e.img?' – har bilde fra før, velg nytt for å bytte':'')+'</label><input id="eimg" type="file" accept="image/*">'+
   '<label class="note" style="display:block;text-align:left">Svarside – tekst som vises etter svaret (valgfritt)</label>'+
   '<textarea id="einfo" rows="5" placeholder="Fortell mer om svaret …">'+esc(e?e.info||'':'')+'</textarea>'+
   '<label class="note" style="display:block;text-align:left">Bilder til svarsiden (valgfritt, opptil 4)'+(e&&e.imgs&&e.imgs.length?' – har '+e.imgs.length+' fra før, velg nye for å bytte':'')+'</label><input id="eimgs" type="file" accept="image/*" multiple>'+
-  '<p class="note">Egne spørsmål spilles alltid som buzzer, uten nedtelling.</p>'+
+  '<p class="note">Egne spørsmål spilles alltid som buzzer, uten nedtelling. Spilleren svarer muntlig, og du trykker «Godkjent» eller «Feil svar» på kontrollskjermen. Svarsiden vises for alle når svaret er godkjent.</p>'+
   '<button class="btn" data-a="saveq">'+(e?'Lagre endringer':'Lagre spørsmål')+'</button>'+(e?'<button class="btn ghost" data-a="cancelq">Avbryt</button>':'')+'</div>';
   h+='<div class="card"><h2>Lagrede ('+own.length+')</h2>';
   if(!own.length)h+='<p class="note">Ingen ennå.</p>';
@@ -292,8 +290,7 @@ function shrink(file,cb,max){
 }
 function saveQ(){
   var t=$('#eq').value.trim(),c=$('#er').value.trim(),w=[];
-  ['#ew1','#ew2','#ew3'].forEach(function(s){var v=$(s).value.trim();if(v)w.push(v)});
-  if(!t||!c||!w.length){alert('Skriv spørsmål, riktig svar og minst ett feil svar.');return}
+  if(!t||!c){alert('Skriv spørsmål og riktig svar.');return}
   var f=$('#eimg').files[0],info=$('#einfo').value.trim(),infoImgs=[],files=[].slice.call($('#eimgs').files,0,4);
   function done(img){
     var own=loadOwn();
@@ -749,7 +746,7 @@ function vSetup(){
 function buildQs(cfg){
   var lists=[];
   (cfg.themes||[]).forEach(function(t){lists.push(shuffle(themeQs(t)))});
-  if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){var q=mkQ(o.t,o.c,o.w,o.img);q.own=true;q.info=o.info||'';q.imgs=o.imgs||[];return q}));
+  if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){var q=mkQ(o.t,o.c,[],o.img);q.own=true;q.info=o.info||'';q.imgs=o.imgs||[];return q}));
   cfg.cats.forEach(function(c){lists.push(shuffle(BANK[c]).map(function(r){return mkQ(r[0],r[1],r.slice(2))}))});
   var qs=[];
   while(qs.length<cfg.count&&lists.some(function(l){return l.length})){
@@ -817,6 +814,7 @@ function hostMsg(conn,m){
     var pl=H.players[conn._name];
     if(!pl)return;
     if(H.qmode==='b'){
+      if(H.qs[H.qi].own)return;
       var cur=H.queue[H.turn];
       if(H.phase!=='buzz'||!cur||cur.name!==pl.name)return;
       hostTurnResult((m.c|0)===H.qs[H.qi].correct,false);return;
@@ -885,11 +883,11 @@ function stateFor(p){
   if(H.phase==='buzz'){
     var cur=H.queue[H.turn],first=H.queue[0],pos=-1,d=0,you=cur.name===p.name;
     H.queue.forEach(function(e,i){if(e.name===p.name){pos=i;d=e.at-first.at}});
-    return {t:'s',ph:'buzz',b:true,i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,opts:you?q.opts:null,who:cur.name,you:you,pos:pos,turn:H.turn,d:d,locked:!!H.locked[p.name],left:H.endsAt?Math.max(0,H.endsAt-Date.now()):null,
+    return {t:'s',ph:'buzz',b:true,i:H.qi+1,n:H.qs.length,text:q.text,img:q.img,opts:(you&&!q.own)?q.opts:null,oral:!!q.own,who:cur.name,you:you,pos:pos,turn:H.turn,d:d,locked:!!H.locked[p.name],left:H.endsAt?Math.max(0,H.endsAt-Date.now()):null,
       queue:H.queue.map(function(e){return {name:e.name,d:e.at-first.at}})};
   }
   if(H.phase==='reveal'){var l=p.last||{c:null,gain:0,ok:false};
-    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',you:{b:H.qmode==='b',c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
+    return {t:'s',ph:'reveal',i:H.qi+1,n:H.qs.length,text:q.text,opts:q.opts,correct:q.correct,info:q.info||'',own:!!q.own,you:{b:H.qmode==='b',c:l.c,ok:l.ok,gain:l.gain,score:p.score,rank:r.indexOf(p)+1},top:top(5)}}
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
@@ -1033,7 +1031,7 @@ function vHost(){
   }else if(H.phase==='q'){
     var qhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+cdNow()+'</span></div>'+
     qDiv(q);
-    var qmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
+    var qmid=(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+(q.own?'':optsHtml(q,'q'))+
     (H.qmode==='b'
       ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
       :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
@@ -1046,10 +1044,14 @@ function vHost(){
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+cdNow()+'</span></div>'+
     qDiv(q)+
     '<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+
-    '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+' – svarer A–D på mobilen</p></div>'+
-    (q.img?'<img class="qimg" style="max-height:28vh" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
+    '<div class="card" style="text-align:center;background:rgba(34,197,94,.35)"><div class="big" style="margin:0">🔔 '+esc(cur.name)+' svarer</div><p class="note" style="margin:6px 0 0">'+(H.turn===0?'Trykket først':'Nr. '+(H.turn+1)+' i køen')+(q.own?' – svarer muntlig':' – svarer A–D på mobilen')+'</p></div>'+
+    (q.img?'<img class="qimg" style="max-height:'+(q.own?'40vh':'28vh')+'" src="'+q.img+'" alt="">':'')+(q.own?'':optsHtml(q,'q'))+
     '</div>'+queueHtml()+'</div>'+
-    ctlBar('<button class="btn ghost" data-a="skip">Vis fasit nå</button>','<button class="btn ghost" data-a="skipturn">Hopp over '+esc(cur.name)+'</button>','<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
+    (q.own
+      ?ctlBar('<button class="btn ok" data-a="approve">✓ Godkjent</button>',
+        '<div class="row"><button class="btn ghost" data-a="wrong">✗ Feil svar</button><button class="btn ghost" data-a="skipturn">Hopp over</button><button class="btn ghost" data-a="skip">Vis fasit nå</button></div>',
+        '<button class="btn red" data-a="finish">Avslutt quizen nå</button>')
+      :ctlBar('<button class="btn ghost" data-a="skip">Vis fasit nå</button>','<button class="btn ghost" data-a="skipturn">Hopp over '+esc(cur.name)+'</button>','<button class="btn red" data-a="finish">Avslutt quizen nå</button>'));
   }else if(H.phase==='reveal'){
     var rhead='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     qDiv(q);
@@ -1171,8 +1173,8 @@ function vPlayer(){
     h+='<div class="top"><span>Spørsmål '+s.i+' av '+s.n+'</span><span class="cd" id="pcd">'+pcd()+'</span></div>'+
     '<div class="q" style="font-size:22px">'+esc(s.text)+'</div>'+(s.img?'<img class="qimg" style="max-height:24vh" src="'+s.img+'" alt="">':'');
     if(s.you){
-      h+='<div class="buzzmsg win">'+(s.pos===0?'✅ Du trykket først!':'✅ Nå er det din tur!')+'<br><small>Velg riktig svar</small></div><div class="opts">';
-      for(var j=0;j<s.opts.length;j++){
+      h+='<div class="buzzmsg win">'+(s.pos===0?'✅ Du trykket først!':'✅ Nå er det din tur!')+'<br><small>'+(s.oral?'Svar høyt – verten godkjenner':'Velg riktig svar')+'</small></div><div class="opts">';
+      for(var j=0;s.opts&&j<s.opts.length;j++){
         h+='<button class="opt o'+j+(P.chosen===j?' mine':(P.chosen!=null?' dim':''))+'" data-a="ans" data-i="'+j+'"'+(P.chosen!=null?' disabled':'')+'><b>'+LETT[j]+'</b><span>'+esc(s.opts[j])+'</span></button>';
       }
       h+='</div>'+(P.chosen!=null?'<p class="note">Svar sendt …</p>':'');
@@ -1187,7 +1189,7 @@ function vPlayer(){
     var y=s.you,gtxt=(y.gain>0?'+':'')+y.gain+' poeng';
     h+='<div class="big '+(y.ok?'ok':'no')+'">'+(y.b?(y.gain>0?'✓ Riktig!':(y.gain<0?'✗ Feil':'Ingen poeng')):(y.c==null?'⏱ Ikke svart':(y.ok?'✓ Riktig!':'✗ Feil')))+'</div>'+
     '<p class="sub" style="font-size:22px">'+gtxt+'</p>'+
-    '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+LETT[s.correct]+'. '+esc(s.opts[s.correct])+'</div>'+(s.info?'<p class="note" style="margin:4px 0 0">'+esc(s.info)+'</p>':'')+'</div>'+
+    '<div class="card"><p class="note" style="margin:0">Riktig svar</p><div class="q" style="margin:4px 0 0;font-size:24px">'+(s.own?'':LETT[s.correct]+'. ')+esc(s.opts[s.correct])+'</div>'+(s.info?(s.own?'<p style="margin:10px 0 0;font-size:18px;line-height:1.4;text-align:left">'+esc(s.info).replace(/\n/g,'<br>')+'</p>':'<p class="note" style="margin:4px 0 0">'+esc(s.info)+'</p>'):'')+'</div>'+
     '<div class="card"><h2>Du er nr. '+y.rank+' med '+y.score+' poeng</h2>'+scoreRows(s.top,5)+'</div>'+
     '<p class="note">Venter på neste spørsmål…</p>';
   }else{
@@ -1234,6 +1236,8 @@ app.addEventListener('click',function(e){
   else if(a==='buzz')playerBuzz();
   else if(a==='setmode'){H.cfg.mode=b.getAttribute('data-v');render()}
   else if(a==='skipturn')hostTurnResult(false,true);
+  else if(a==='approve')hostTurnResult(true,false);
+  else if(a==='wrong')hostTurnResult(false,false);
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
 });
 
