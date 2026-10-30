@@ -67,6 +67,10 @@ label.chk input{width:22px;height:22px}
 .buzzmsg{background:rgba(255,255,255,.15);border-radius:18px;padding:26px 14px;margin:18px 0;text-align:center;font-size:24px;font-weight:800}
 .buzzmsg.win{background:rgba(34,197,94,.45);font-size:30px}
 .buzzmsg small{font-size:16px;font-weight:600;opacity:.9}
+.wrap.wide{max-width:1500px}
+.gl{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.gl .mid{order:-1}
+@media(min-width:900px){.gl{grid-template-columns:minmax(170px,1fr) minmax(0,2.6fr) minmax(170px,1fr)}.gl .mid{order:0}}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding-right:50px}
 .tab{border:0;border-radius:10px;padding:10px 14px;font-size:16px;font-weight:700;background:rgba(255,255,255,.15);color:#fff;font-family:inherit}
 .tab.on{background:#fde047;color:#3b0764}
@@ -488,7 +492,7 @@ function hostMsg(conn,m){
     }
     if(H.phase!=='q'||pl.ans)return;
     var c=m.c|0,q=H.qs[H.qi],left=Math.max(0,H.endsAt-Date.now()),ok=c===q.correct;
-    pl.ans={c:c,ok:ok,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
+    pl.ans={c:c,ok:ok,ms:H.cfg.secs*1000-left,gain:ok?500+Math.round(500*left/(H.cfg.secs*1000)):0};
     conn.send({t:'a',c:c});
     refreshHost();
     if(allAnswered())hostReveal();
@@ -558,7 +562,10 @@ function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}
 function broadcast(){for(var k in H.players)sendTo(H.players[k])}
 function refreshHost(){
   if(view!=='host')return;
-  if(H.phase==='q'){var e=$('#cnt');if(e)e.textContent=answeredCount()}else render();
+  if(H.phase==='q'){
+    var e=$('#cnt');if(e)e.textContent=answeredCount();
+    var t=$('#times');if(t)t.innerHTML=timesInner(false);
+  }else render();
 }
 function hostNext(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
@@ -629,8 +636,27 @@ function lockedHtml(){
   var n=[];for(var k in H.locked)n.push(esc(k));
   return n.length?'<p class="small">Ute på dette spørsmålet: '+n.join(', ')+'</p>':'';
 }
+function fmtS(ms){return (ms/1000).toFixed(1).replace('.',',')+'sek'}
+/* Venstre: poengtavle fortløpende, medalje til nr 1 */
+function boardHtml(){
+  var h='<div class="card"><h2>Poeng</h2>';
+  ranked().forEach(function(p,i){h+='<div class="score"><span>'+(i===0&&p.score>0?'🥇 ':'')+esc(p.name)+'</span><b>'+p.score+'</b></div>'});
+  return h+'</div>';
+}
+/* Høyre: svartid per spiller, raskest øverst */
+function timesInner(reveal){
+  var a=[],none=[];
+  for(var k in H.players){var p=H.players[k];if(p.ans)a.push(p);else none.push(p)}
+  a.sort(function(x,y){return x.ans.ms-y.ans.ms});
+  var h='<h2>Svartid</h2>';
+  if(!a.length&&!reveal)h+='<p class="note">Venter på svar …</p>';
+  a.forEach(function(p){h+='<div class="score"><span>'+(reveal?(p.ans.ok?'✓ ':'✗ '):'')+esc(p.name)+'</span><b>'+fmtS(p.ans.ms)+'</b></div>'});
+  if(reveal)none.forEach(function(p){h+='<div class="score"><span>'+esc(p.name)+'</span><b>–</b></div>'});
+  return h;
+}
 function vHost(){
-  var q=H.qs[H.qi],r=ranked(),h='<div class="wrap">';
+  var wide=(H.phase==='q'||H.phase==='reveal')&&H.qmode!=='b';
+  var q=H.qs[H.qi],r=ranked(),h='<div class="wrap'+(wide?' wide':'')+'">';
   if(H.phase==='lobby'){
     var url=location.href.split('?')[0].split('#')[0];
     h+='<div class="small">Åpne denne siden på mobilen</div><div class="url">'+esc(url)+'</div>'+
@@ -641,13 +667,14 @@ function vHost(){
     '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
     '<button class="btn red" data-a="close">Avslutt</button>';
   }else if(H.phase==='q'){
-    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
+    var qmid='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'q')+
     (H.qmode==='b'
       ?'<p class="big" style="font-size:28px">🔔 Trykk på buzzeren!</p>'+lockedHtml()
       :'<p class="small" id="cnt">'+answeredCount()+'</p>')+
     '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
     '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
+    h+=H.qmode==='b'?qmid:'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+qmid+'</div><div class="card" id="times">'+timesInner(false)+'</div></div>';
   }else if(H.phase==='buzz'){
     var cur=H.queue[H.turn];
     h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span class="cd" id="cd">'+Math.ceil(Math.max(0,H.endsAt-Date.now())/1000)+'</span></div>'+
@@ -658,12 +685,13 @@ function vHost(){
     '<button class="btn ghost" data-a="skip">Vis fasit nå</button>'+
     '<button class="btn red" data-a="finish">Avslutt quizen nå</button>';
   }else if(H.phase==='reveal'){
-    h+='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
+    var rmid='<div class="top"><span>Spørsmål '+(H.qi+1)+' av '+H.qs.length+'</span><span></span></div>'+
     '<div class="q">'+esc(q.text)+'</div>'+(q.img?'<img class="qimg" src="'+q.img+'" alt="">':'')+optsHtml(q,'reveal')+(q.info?'<p class="sub" style="margin-top:12px;font-size:20px">'+esc(q.info)+'</p>':'')+
-    '<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>'+
+    (wide?'':'<div class="card" style="margin-top:14px"><h2>Poengtavle</h2>'+scoreRows(r,5)+'</div>')+
     (H.qi+1>=H.qs.length?'':modeToggle('Neste spørsmål spilles som'))+
     '<button class="btn" data-a="next">'+(H.qi+1>=H.qs.length?'Se sluttresultat':'Neste spørsmål')+'</button>'+
     (H.qi+1>=H.qs.length?'':'<button class="btn red" data-a="finish">Avslutt quizen nå</button>');
+    h+=wide?'<div class="gl"><div>'+boardHtml()+'</div><div class="mid">'+rmid+'</div><div class="card" id="times">'+timesInner(true)+'</div></div>':rmid;
   }else{
     h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(r,50)+'</div>'+
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
