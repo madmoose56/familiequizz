@@ -29,6 +29,6 @@ Repo: `madmoose56/Familiequiz` → GitHub Pages (gren `main`, rot).
 - Oppdater-pil (↻) øverst til høyre tømmer cache og laster på nytt.
 
 ## Arbeidsmåte
-- Mappen ligger på `D:\iPhone\Familiequiz`.
+- Mappen ligger på `D:iPhoneFamiliequizz` (kan gis nytt navn Familiequiz når ingenting bruker den). Appen og listen ligger i samme repo.
 - Rediger `index.html`, bump `sw.js`, commit og push til `main`.
 - Si fra tydelig hva som er testet og hva som bare kan bekreftes på iPhone.
