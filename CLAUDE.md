@@ -25,7 +25,7 @@ Repo: `madmoose56/Familiequiz` → GitHub Pages (gren `main`, rot).
 - Wikidata er hovedkilden for mange treff (SNL/NB er norske og gir få). `WDCATS` i index.html er kategorilisten (flagg, byer, fjell, innsjøer, øyer, vulkaner, fossefall, slott, broer, kirker, museer, skyskrapere, statuer, malerier, bil- og fotballogoer, musikkgrupper). Dyr/planter (taxon) gir tidsavbrudd i Wikidata. MCP-servere kan ikke kalles fra selve appen (kun fra Claude-økten); appen kan bare bruke åpne nett-API-er.
 - Bilmerker: logoer på Wikidata/Commons har nesten alltid navnet i selve bildet (OCR med Tesseract.js fanger bare ~halvparten), derfor brukes bilder av bilmodeller (P176 produsent, maks 3 per merke) i stedet for logoer. Fotball-logoer kjøres gjennom OCR-filter (`ocrFilter`, to leseformer), men er ikke 100 % trygge – admin må se over med ✕.
 - Egne spørsmål: bare riktig svar (ingen A–D), svares muntlig, vert trykker Godkjent/Feil svar (approve/wrong); alltid buzzer (q.own), felt info (tekst) og imgs (opptil 4 bilder) vises på en svarside (infoPage) i fasit; liste «Svarte» (queueResultHtml) oppe til høyre.
-- Spørsmålsliste: `sporsmal/sporsmal.csv` + `sporsmal/bilder/` (se LES-MEG.txt); knappen «Hent fra liste» i Egne spørsmål leser den (importList/parseCsv).
+- Spørsmålslister: alle `sporsmal/*.csv` (+ `sporsmal/bilder/`, se LES-MEG.txt) listes i `sporsmal/lister.json` (lages med `node sporsmal/lag-liste.js` – kjør før hver opplasting). Vises som avkrysning under «Våre egne» i Start quiz (loadLists/fillLists/buildQs).
 - Oppdater-pil (↻) øverst til høyre tømmer cache og laster på nytt.
 
 ## Arbeidsmåte

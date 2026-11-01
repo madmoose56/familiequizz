@@ -235,6 +235,7 @@ function render(){
   else if(view==='player')h=vPlayer();
   app.innerHTML=h;
   window.scrollTo(0,0);
+  if(view==='setup')fillLists();
 }
 
 /* ===== Hjem ===== */
@@ -270,8 +271,7 @@ function vEditor(){
   '<label class="note" style="display:block;text-align:left">Bilder til svarsiden (valgfritt, opptil 4)'+(e&&e.imgs&&e.imgs.length?' – har '+e.imgs.length+' fra før, velg nye for å bytte':'')+'</label><input id="eimgs" type="file" accept="image/*" multiple>'+
   '<p class="note">Egne spørsmål spilles alltid som buzzer, uten nedtelling. Spilleren svarer muntlig, og du trykker «Godkjent» eller «Feil svar» på kontrollskjermen. Svarsiden vises for alle når svaret er godkjent.</p>'+
   '<button class="btn" data-a="saveq">'+(e?'Lagre endringer':'Lagre spørsmål')+'</button>'+(e?'<button class="btn ghost" data-a="cancelq">Avbryt</button>':'')+'</div>';
-  h+='<div><div class="card"><h2>Liste fra Excel/CSV</h2><p class="note">Spørsmål og bilder ligger i mappen <b>sporsmal/</b> i prosjektet (sporsmal.csv og sporsmal/bilder/). Etter at listen er lastet opp, trykker du knappen under. Spørsmål som kom fra listen byttes ut hver gang, mens de du la inn for hånd beholdes.</p>'+
-  '<button class="btn" data-a="importlist">Hent fra liste</button><p class="note" id="imst"></p></div>'+
+  h+='<div><div class="card"><h2>Lister fra Excel/CSV</h2><p class="note">Lister som er lastet opp (mappen <b>sporsmal/</b>) velges direkte under «Start quiz» → Temaer → «Våre egne».</p></div>'+
   '<div class="card"><h2>Lagrede ('+own.length+')</h2>';
   if(!own.length)h+='<p class="note">Ingen ennå.</p>';
   for(var i=0;i<own.length;i++){
@@ -300,25 +300,38 @@ function parseCsv(txt){
 }
 function listImg(n){n=(n||'').trim();if(!n)return null;return /^(https?:|data:)/.test(n)?n:'sporsmal/bilder/'+encodeURI(n)}
 /* Kolonner: Spørsmål; Riktig svar; Svarside-tekst; Spørsmålsbilde; Svarbilde 1–4 */
-function importList(){
-  var st=$('#imst');function say(m){if(st)st.textContent=m}
-  say('Henter …');
-  fetch('sporsmal/sporsmal.csv?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(txt){
-    var rows=parseCsv(txt);
-    if(rows.length&&/sp[øo]rsm/i.test(rows[0][0]||''))rows.shift();
-    var items=[],skipped=0;
-    rows.forEach(function(r){
-      var t=(r[0]||'').trim(),c=(r[1]||'').trim();
-      if(!t&&!c)return;
-      if(!t||!c){skipped++;return}
-      var imgs=[];for(var k=4;k<=7;k++){var u=listImg(r[k]);if(u)imgs.push(u)}
-      items.push({t:t,c:c,w:[],img:listImg(r[3]),info:(r[2]||'').trim(),imgs:imgs,list:true});
+/* Lister: sporsmal/lister.json (lages av lag-liste.js) peker på CSV-filene i sporsmal/ */
+var LISTS=null;
+function listItems(txt){
+  var rows=parseCsv(txt);
+  if(rows.length&&/sp[øo]rsm/i.test(rows[0][0]||''))rows.shift();
+  var items=[];
+  rows.forEach(function(r){
+    var t=(r[0]||'').trim(),c=(r[1]||'').trim();
+    if(!t||!c)return;
+    var imgs=[];for(var k=4;k<=7;k++){var u=listImg(r[k]);if(u)imgs.push(u)}
+    items.push({t:t,c:c,img:listImg(r[3]),info:(r[2]||'').trim(),imgs:imgs});
+  });
+  return items;
+}
+function listName(f){return f.replace(/\.csv$/i,'').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim()}
+function loadLists(cb){
+  var ts='?t='+Date.now();
+  fetch('sporsmal/lister.json'+ts,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).catch(function(){return ['sporsmal.csv']}).then(function(files){
+    var out=[],left=files.length;
+    if(!left){LISTS=[];cb();return}
+    files.forEach(function(f,i){
+      fetch('sporsmal/'+encodeURIComponent(f)+ts,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(t){out[i]={f:f,n:listName(f),items:listItems(t)}},function(){out[i]=null}).then(function(){
+        if(--left===0){LISTS=out.filter(function(x){return x&&x.items.length});cb()}
+      });
     });
-    var own=loadOwn().filter(function(o){return !o.list}).concat(items);
-    if(!lsSet(OWN_KEY,JSON.stringify(own))){say('Fikk ikke lagret.');return}
-    editIdx=-1;render();
-    var s2=$('#imst');if(s2)s2.textContent='Hentet '+items.length+' spørsmål fra listen'+(skipped?' ('+skipped+' rader mangler spørsmål eller svar og ble hoppet over)':'')+'.';
-  }).catch(function(e){say('Kunne ikke hente listen ('+e.message+'). Ligger sporsmal/sporsmal.csv i prosjektet og er det lastet opp?')});
+  });
+}
+function fillLists(){
+  var box=$('#listbox');if(!box)return;
+  if(LISTS===null){box.innerHTML='<p class="note">Henter lister …</p>';loadLists(fillLists);return}
+  if(!LISTS.length){box.innerHTML='<p class="note">Ingen lister funnet i sporsmal/.</p>';return}
+  box.innerHTML=LISTS.map(function(l,i){return '<label class="chk"><input type="checkbox" id="L'+i+'"> '+esc(l.n)+' ('+l.items.length+')</label>'}).join('');
 }
 function shrink(file,cb,max){
   var url=URL.createObjectURL(file),im=new Image();
@@ -774,6 +787,7 @@ function vSetup(){
   h+='<div class="cols"><div class="card"><h2>Temaer</h2><div class="sec">Med bilde</div>';
   allThemes().forEach(function(t,i){h+='<label class="chk"><input type="checkbox" id="t'+i+'"'+(i<THEMES.length?' checked':'')+'> '+esc(t[1])+'</label>'});
   h+='<div class="sec">Våre egne</div><label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Egne spørsmål ('+own.length+')</label>'+
+  '<div id="listbox"></div>'+
   '<button class="btn ghost" data-a="own">Legg inn / rediger egne spørsmål</button>'+
   '<div class="sec">Vanlige kategorier</div>';
   for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
@@ -789,6 +803,9 @@ function vSetup(){
 function buildQs(cfg){
   var lists=[];
   (cfg.themes||[]).forEach(function(t){lists.push(shuffle(themeQs(t)))});
+  (cfg.lists||[]).forEach(function(f){
+    (LISTS||[]).forEach(function(l){if(l.f===f)lists.push(shuffle(l.items).map(function(o){var q=mkQ(o.t,o.c,[],o.img);q.own=true;q.info=o.info||'';q.imgs=o.imgs||[];return q}))});
+  });
   if(cfg.own)lists.push(shuffle(loadOwn()).map(function(o){var q=mkQ(o.t,o.c,[],o.img);q.own=true;q.info=o.info||'';q.imgs=o.imgs||[];return q}));
   cfg.cats.forEach(function(c){lists.push(shuffle(BANK[c]).map(function(r){return mkQ(r[0],r[1],r.slice(2))}))});
   var qs=[];
@@ -805,7 +822,8 @@ function startHost(){
   for(var i=0;i<CATS.length;i++)if($('#c'+i).checked)cats.push(CATS[i]);
   allThemes().forEach(function(t,i){if($('#t'+i).checked)themes.push(t[0])});
   var own=$('#cown').checked&&!$('#cown').disabled;
-  H.cfg={cats:cats,themes:themes,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10),mode:$('#smode').value};
+  var lfiles=[];(LISTS||[]).forEach(function(l,i){var e=$('#L'+i);if(e&&e.checked)lfiles.push(l.f)});
+  H.cfg={cats:cats,themes:themes,lists:lfiles,own:own,count:parseInt($('#scount').value,10),secs:parseInt($('#ssecs').value,10),mode:$('#smode').value};
   H.qs=buildQs(H.cfg);
   if(!H.qs.length){alert('Velg minst ett tema.');return}
   H.players={};
@@ -1262,7 +1280,6 @@ app.addEventListener('click',function(e){
   else if(a==='cancelq'){editIdx=-1;render()}
   else if(a==='home')go('home');
   else if(a==='saveq')saveQ();
-  else if(a==='importlist')importList();
   else if(a==='delq'){if(confirm('Slette spørsmålet?')){var o=loadOwn();o.splice(i,1);lsSet(OWN_KEY,JSON.stringify(o));editIdx=-1;render()}}
   else if(a==='open')startHost();
   else if(a==='start')hostNext();

@@ -6,4 +6,4 @@ Slik legger du inn spørsmål i listen
    Selve bildefilene legges i mappen bilder/ (bruk gjerne små bilder, under 1 MB).
 4. Lagre som «CSV UTF-8» (ellers blir æ, ø og å feil). Semikolon eller komma som skilletegn går begge.
 5. Si fra til Claude at listen er oppdatert, så lastes den opp til GitHub.
-6. I appen: Egne spørsmål -> «Hent fra liste».
+6. Lister velges i appen: Start quiz → Temaer → «Våre egne». Claude kjører `node sporsmal/lag-liste.js` før opplasting så nye CSV-filer dukker opp.
