@@ -1,7 +1,9 @@
 Slik legger du inn spørsmål i listen
 1. Åpne sporsmal.csv i Excel. Første rad er overskriftene, ikke endre dem.
 2. Én rad per spørsmål. Kolonnene er:
-   A Spørsmål | B Riktig svar | C Svarside-tekst | D Spørsmålsbilde | E-H Svarbilde 1-4
+   A Spørsmål | B Riktig svar | C Svarside-tekst | D Spørsmålsbilde | E-H Svarbilde 1-4 | I Lydfil (valgfri)
+   Lydfil = bare filnavnet, f.eks. sang1.mp3. Filen legges i mappen lyd/ (korte utdrag, 15-30 sek).
+   Musikken starter når verten trykker «Neste spørsmål» og stopper når fasit vises.
 3. Bildekolonnene skal bare ha filnavnet, f.eks. crystal-palace.jpg.
    Selve bildefilene legges i mappen bilder/ (bruk gjerne små bilder, under 1 MB).
 4. Lagre som «CSV UTF-8» (ellers blir æ, ø og å feil). Semikolon eller komma som skilletegn går begge.
