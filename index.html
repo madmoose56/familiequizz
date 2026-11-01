@@ -98,11 +98,23 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .sub{font-size:2vw!important}
 .wrap.wide .big{font-size:2.4vw}
 .wrap.wide .row{gap:1vw}
+}
 .btn.ok{background:#22c55e;color:#04290f}
+.btn.sm{font-size:14px;padding:9px;margin:6px 0 0}
+.btn.big{font-size:24px;padding:24px;margin-top:12px}
+details.dt{border-top:1px solid rgba(255,255,255,.18);padding:2px 0}
+details.dt>summary{cursor:pointer;list-style:none;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:12px 0;opacity:.95}
+details.dt>summary::-webkit-details-marker{display:none}
+details.dt>summary::before{content:'▸';display:inline-block;width:1.2em;transition:transform .15s}
+details.dt[open]>summary::before{transform:rotate(90deg)}
+.cnt2{font-weight:400;opacity:.75;text-transform:none;letter-spacing:0;margin-left:4px}
+.ansbox{background:rgba(34,197,94,.25)}
+.ansbox .a{font-size:28px;font-weight:800;color:#bbf7d0;margin-top:2px}
 .infopg{background:rgba(255,255,255,.12);border-radius:16px;padding:16px;text-align:left}
 .infopg .ia{font-size:26px;font-weight:800;color:#86efac;margin-bottom:8px}
 .infopg .itx{font-size:20px;line-height:1.4;margin-bottom:10px}
 .igal{display:grid;gap:10px;grid-template-columns:1fr 1fr}.igal.n1{grid-template-columns:1fr}.igal img{width:100%;max-height:34vh;object-fit:contain;border-radius:12px;background:rgba(0,0,0,.25)}
+@media(min-width:900px){
 .wrap.wide .infopg{border-radius:1.2vw;padding:1.2vw 1.6vw}
 .wrap.wide .infopg .ia{font-size:3vw;margin-bottom:.6vw}
 .wrap.wide .infopg .itx{font-size:1.9vw;margin-bottom:.8vw}
@@ -221,7 +233,8 @@ window.onerror=function(m,u,l){var b=$('#errBox');b.style.display='block';b.text
 /* ===== Tilstand ===== */
 var view='home';
 var S={cats:null,own:true,count:10,secs:20};
-var H={queue:[],turn:0,peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
+var C={peer:null,conn:null,code:'',st:null,gen:0,joined:false,leaving:false,status:'',msg:'',lv:null};
+var H={ctls:[],queue:[],turn:0,peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
 var P={peer:null,conn:null,name:'',code:'',st:null,end:0,chosen:null,joined:false,leaving:false,gen:0,tick:null,status:''};
 
 function go(v){view=v;render()}
@@ -233,9 +246,10 @@ function render(){
   else if(view==='themes')h=vThemes();
   else if(view==='host')h=vHost();
   else if(view==='player')h=vPlayer();
+  else if(view==='ctl')h=vCtl();
   app.innerHTML=h;
   window.scrollTo(0,0);
-  if(view==='setup')fillLists();
+  if(view==='setup'){fillLists();updCounts()}
 }
 
 /* ===== Hjem ===== */
@@ -252,6 +266,8 @@ function vHome(){
   '<input id="jcode" type="tel" inputmode="numeric" maxlength="4" placeholder="Kode (4 siffer)" value="'+esc(kode)+'">'+
   '<input id="jname" type="text" maxlength="14" placeholder="Ditt navn" value="'+esc(lsGet('fq-navn',''))+'">'+
   '<button class="btn" data-a="join">Bli med</button></div>'+
+  '<div class="card"><h2>Quizmester (godkjenne svar)</h2><input id="ccode" type="tel" inputmode="numeric" maxlength="4" placeholder="Rommets kode (4 siffer)" value="'+esc(lsGet('fq-ctlkode',''))+'">'+
+  '<button class="btn ghost" data-a="ctlopen">Åpne kontrollpanel</button></div>'+
   (isPhone()?'':'<div class="card"><h2>Vær vert (admin)</h2><button class="btn" data-a="new">Start ny quiz</button>'+
   '<button class="btn ghost" data-a="own">Våre egne spørsmål ('+n+')</button></div>'+
   '<p class="note">Verten må la appen stå åpen under hele quizen.</p>')+'</div>';
@@ -301,7 +317,21 @@ function parseCsv(txt){
 function listImg(n){n=(n||'').trim();if(!n)return null;return /^(https?:|data:)/.test(n)?n:'sporsmal/bilder/'+encodeURI(n)}
 /* Kolonner: Spørsmål; Riktig svar; Svarside-tekst; Spørsmålsbilde; Svarbilde 1–4 */
 /* Lister: sporsmal/lister.json (lages av lag-liste.js) peker på CSV-filene i sporsmal/ */
-var LISTS=null;
+var LISTS=null,LISTVER=0,LISTFAIL=0,KEEP=[];
+/* Finner CSV-filer: GitHub-API (nye filer dukker opp uten kode) + lister.json som reserve */
+function listFiles(cb){
+  var names={};
+  function fin(){var a=Object.keys(names).sort();cb(a.length?a:['sporsmal.csv'])}
+  function addJson(){
+    fetch('sporsmal/lister.json?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(a){a.forEach(function(f){names[f]=1})},function(){}).then(fin);
+  }
+  var m=location.hostname.match(/^([^.]+)\.github\.io$/),repo=location.pathname.split('/')[1];
+  if(m&&repo){
+    fetch('https://api.github.com/repos/'+m[1]+'/contents/sporsmal').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(a){
+      a.forEach(function(x){if(x.type==='file'&&/\.csv$/i.test(x.name))names[x.name]=1});
+    },function(){}).then(addJson);
+  }else addJson();
+}
 function listItems(txt){
   var rows=parseCsv(txt);
   if(rows.length&&/sp[øo]rsm/i.test(rows[0][0]||''))rows.shift();
@@ -317,12 +347,15 @@ function listItems(txt){
 function listName(f){return f.replace(/\.csv$/i,'').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim()}
 function loadLists(cb){
   var ts='?t='+Date.now();
-  fetch('sporsmal/lister.json'+ts,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).catch(function(){return ['sporsmal.csv']}).then(function(files){
+  listFiles(function(files){
     var out=[],left=files.length;
-    if(!left){LISTS=[];cb();return}
     files.forEach(function(f,i){
       fetch('sporsmal/'+encodeURIComponent(f)+ts,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.text()}).then(function(t){out[i]={f:f,n:listName(f),items:listItems(t)}},function(){out[i]=null}).then(function(){
-        if(--left===0){LISTS=out.filter(function(x){return x&&x.items.length});cb()}
+        if(--left===0){
+          LISTFAIL=out.filter(function(x){return !x}).length;
+          LISTS=out.filter(function(x){return x&&x.items.length});
+          LISTVER++;cb();
+        }
       });
     });
   });
@@ -330,8 +363,23 @@ function loadLists(cb){
 function fillLists(){
   var box=$('#listbox');if(!box)return;
   if(LISTS===null){box.innerHTML='<p class="note">Henter lister …</p>';loadLists(fillLists);return}
-  if(!LISTS.length){box.innerHTML='<p class="note">Ingen lister funnet i sporsmal/.</p>';return}
-  box.innerHTML=LISTS.map(function(l,i){return '<label class="chk"><input type="checkbox" id="L'+i+'"> '+esc(l.n)+' ('+l.items.length+')</label>'}).join('');
+  box.innerHTML=(LISTS.length?LISTS.map(function(l,i){return '<label class="chk"><input type="checkbox" id="L'+i+'"'+(KEEP.indexOf(l.f)>=0?' checked':'')+'> '+esc(l.n)+' ('+l.items.length+')</label>'}).join(''):'<p class="note">Ingen lister funnet i sporsmal/.</p>')+
+    '<button class="btn ghost sm" data-a="reloadlists">↻ Oppdater lister</button>'+
+    (LISTFAIL?'<p class="note">'+LISTFAIL+' fil(er) er ikke klare ennå – vent 1–2 minutter og trykk igjen.</p>':'');
+  updCounts();
+}
+/* Åpne/lukke-seksjoner i Temaer */
+function openSt(){try{return JSON.parse(lsGet('fq-open','{"own":true}'))||{}}catch(e){return {}}}
+function sect(k,title,body){return '<details class="dt" data-k="'+k+'"'+(openSt()[k]?' open':'')+'><summary>'+title+' <span class="cnt2"></span></summary>'+body+'</details>'}
+function updCounts(){
+  [].forEach.call(document.querySelectorAll('details.dt'),function(d){
+    var n=d.querySelectorAll('input[type=checkbox]:checked').length,e=d.querySelector('.cnt2');
+    if(e)e.textContent=n?'· '+n+' valgt':'';
+  });
+}
+function setAllOpen(v){
+  var s={};[].forEach.call(document.querySelectorAll('details.dt'),function(d){d.open=v;s[d.getAttribute('data-k')]=v});
+  lsSet('fq-open',JSON.stringify(s));
 }
 function shrink(file,cb,max){
   var url=URL.createObjectURL(file),im=new Image();
@@ -784,13 +832,16 @@ function themeQs(id){
 }
 function vSetup(){
   var own=loadOwn(),h='<div class="wrap">'+adminTabs('setup');
-  h+='<div class="cols"><div class="card"><h2>Temaer</h2><div class="sec">Med bilde</div>';
-  allThemes().forEach(function(t,i){h+='<label class="chk"><input type="checkbox" id="t'+i+'"'+(i<THEMES.length?' checked':'')+'> '+esc(t[1])+'</label>'});
-  h+='<div class="sec">Våre egne</div><label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Egne spørsmål ('+own.length+')</label>'+
+  h+='<div class="cols"><div class="card"><h2>Temaer</h2><div class="row"><button class="btn ghost sm" data-a="openall">Åpne alle</button><button class="btn ghost sm" data-a="closeall">Lukk alle</button></div>';
+  var med='';
+  allThemes().forEach(function(t,i){med+='<label class="chk"><input type="checkbox" id="t'+i+'"'+(i<THEMES.length?' checked':'')+'> '+esc(t[1])+'</label>'});
+  h+=sect('med','Med bilde',med);
+  h+=sect('own','Våre egne','<label class="chk"><input type="checkbox" id="cown" '+(own.length?'checked':'disabled')+'> Egne spørsmål ('+own.length+')</label>'+
   '<div id="listbox"></div>'+
-  '<button class="btn ghost" data-a="own">Legg inn / rediger egne spørsmål</button>'+
-  '<div class="sec">Vanlige kategorier</div>';
-  for(var i=0;i<CATS.length;i++)h+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
+  '<button class="btn ghost" data-a="own">Legg inn / rediger egne spørsmål</button>');
+  var cats='';
+  for(var i=0;i<CATS.length;i++)cats+='<label class="chk"><input type="checkbox" id="c'+i+'"> '+esc(CATS[i])+'</label>';
+  h+=sect('cats','Vanlige kategorier',cats);
   h+='</div><div><div class="card"><div class="row"><div><h2>Antall spørsmål</h2><select id="scount">'+[10,15,20,25,30].map(function(n){return '<option'+(n===20?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div>'+
   '<div><h2>Tid per spørsmål</h2><select id="ssecs">'+[10,15,20,30,60].map(function(n){return '<option value="'+n+'"'+(n===20?' selected':'')+'>'+n+' sek</option>'}).join('')+'<option value="0">Ubegrenset</option></select></div></div>'+
   '<p class="note">Ubegrenset: ingen nedtelling. Spørsmålet står til alle har svart, eller til du trykker «Vis fasit nå». Fartspoengene regnes da ut fra 30 sekunder.</p>'+
@@ -853,8 +904,42 @@ function ranked(){var a=[];for(var k in H.players)a.push(H.players[k]);a.sort(fu
 function onlineList(){return ranked().filter(function(p){return p.online})}
 function allAnswered(){var o=onlineList();if(!o.length)return false;return o.every(function(p){return !!p.ans})}
 function answeredCount(){var n=0,o=onlineList();o.forEach(function(p){if(p.ans)n++});return n+' av '+o.length+' har svart'}
+/* Quizmester-mobil: ser riktig svar, godkjenner/avviser muntlige svar og styrer quizen */
+function ctlState(){
+  var q=H.qs[H.qi],r=ranked();
+  var s={t:'c',ph:H.phase,n:H.qs.length,i:H.qi+1,players:onlineList().length,mode:H.cfg.mode,lv:LISTVER,nl:(LISTS||[]).length,lf:LISTFAIL,
+    top:r.slice(0,5).map(function(x){return {name:x.name,score:x.score}}),last:H.qi+1>=H.qs.length,no:!!(H.qs[H.qi+1]&&H.qs[H.qi+1].own)};
+  if(q&&H.phase!=='lobby'&&H.phase!=='end'){
+    s.text=q.text;s.ans=q.opts[q.correct];s.info=q.info||'';s.own=!!q.own;s.qmode=H.qmode;
+    s.queue=H.queue.map(function(e,i){
+      var p=H.players[e.name],mk;
+      if(H.phase==='buzz')mk=i<H.turn?'x':(i===H.turn?'now':'wait');
+      else mk=i<H.turn?'x':(i===H.turn&&p&&p.last&&p.last.ok?'ok':'-');
+      return {name:e.name,mark:mk};
+    });
+    if(H.phase==='buzz'&&H.queue[H.turn])s.who=H.queue[H.turn].name;
+  }
+  return s;
+}
+function sendCtl(c){try{c.send(ctlState())}catch(e){}}
+function sendCtls(){H.ctls.forEach(sendCtl)}
+function hostCmd(m){
+  var a=m.a,q=H.qs[H.qi],own=!!(q&&q.own);
+  if(a==='approve'){if(H.phase==='buzz'&&own)hostTurnResult(true,false)}
+  else if(a==='wrong'){if(H.phase==='buzz'&&own)hostTurnResult(false,false)}
+  else if(a==='skipturn'){if(H.phase==='buzz')hostTurnResult(false,true)}
+  else if(a==='reveal')hostReveal();
+  else if(a==='next'){if(H.phase==='reveal')hostNext()}
+  else if(a==='start'){if(H.phase==='lobby'&&onlineList().length)hostNext()}
+  else if(a==='finish')hostFinish();
+  else if(a==='again'){if(H.phase==='end')hostAgain()}
+  else if(a==='mode'){H.cfg.mode=m.v==='b'?'b':'a';broadcast();render()}
+  else if(a==='lists')loadLists(function(){sendCtls();if(view==='setup')fillLists()});
+}
 function hostMsg(conn,m){
   if(!m)return;
+  if(m.t==='ctl'){conn._ctl=true;if(H.ctls.indexOf(conn)<0)H.ctls.push(conn);try{conn.send({t:'ctlok'})}catch(e){}sendCtl(conn);return}
+  if(m.t==='cmd'){if(conn._ctl)hostCmd(m);return}
   if(m.t==='join'){
     var name=String(m.name||'').trim().slice(0,14);
     if(!name){conn.send({t:'err',m:'Skriv et navn.'});return}
@@ -889,6 +974,7 @@ function hostMsg(conn,m){
   }
 }
 function hostDrop(conn){
+  if(conn._ctl){H.ctls=H.ctls.filter(function(c){return c!==conn});return}
   var p=H.players[conn._name];
   if(p&&p.conn===conn){
     p.online=false;refreshHost();
@@ -952,8 +1038,9 @@ function stateFor(p){
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
-function broadcast(){for(var k in H.players)sendTo(H.players[k])}
+function broadcast(){for(var k in H.players)sendTo(H.players[k]);sendCtls()}
 function refreshHost(){
+  sendCtls();
   if(view!=='host')return;
   if(H.phase==='q'){
     var e=$('#cnt');if(e)e.textContent=answeredCount();
@@ -996,7 +1083,7 @@ function hostClose(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   try{if(H.peer)H.peer.destroy()}catch(e){}
   try{if(H.lock)H.lock.release()}catch(e){}
-  H.peer=null;H.players={};H.phase='lobby';go('home');
+  H.peer=null;H.players={};H.ctls=[];H.phase='lobby';go('home');
 }
 function optsHtml(q,mode){
   var h='<div class="opts">';
@@ -1129,6 +1216,100 @@ function vHost(){
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
   }
   return h+'</div>';
+}
+
+/* ===== Quizmester-panel (mobil) ===== */
+function ctlOpen(){
+  var code=$('#ccode').value.trim();
+  if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
+  if(!/^\d{4}$/.test(code)){alert('Koden har 4 siffer.');return}
+  lsSet('fq-ctlkode',code);
+  C.code=code;C.st=null;C.joined=false;C.leaving=false;C.msg='';C.lv=null;C.status='Kobler til…';
+  view='ctl';render();connectCtl();
+}
+function stopCtl(){
+  C.gen++;
+  try{if(C.conn)C.conn.close()}catch(e){}
+  try{if(C.peer)C.peer.destroy()}catch(e){}
+  C.conn=null;C.peer=null;
+}
+function leaveCtl(msg){C.leaving=true;stopCtl();if(msg)alert(msg);go('home')}
+function connectCtl(){
+  if(C.leaving)return;
+  stopCtl();
+  var gen=C.gen,done=false,timeout;
+  function bad(msg){
+    if(done||gen!==C.gen||C.leaving)return;done=true;clearTimeout(timeout);
+    if(!C.joined){leaveCtl(msg)}
+    else{C.status='Mistet forbindelsen – prøver igjen…';render();setTimeout(connectCtl,3000)}
+  }
+  var peer=new Peer();C.peer=peer;
+  timeout=setTimeout(function(){bad('Fant ikke rommet. Sjekk koden, og at verten har appen åpen.')},12000);
+  peer.on('error',function(e){bad(e.type==='peer-unavailable'?'Fant ikke rommet. Sjekk koden, og at verten har appen åpen.':'Tilkoblingsfeil ('+e.type+').')});
+  peer.on('open',function(){
+    var c=peer.connect('familiequiz-'+C.code,{reliable:true});C.conn=c;
+    c.on('open',function(){clearTimeout(timeout);c.send({t:'ctl'})});
+    c.on('data',function(m){if(gen===C.gen)ctlMsg(m)});
+    c.on('close',function(){bad('Mistet forbindelsen.')});
+    c.on('error',function(){bad('Tilkoblingsfeil.')});
+  });
+}
+function ctlMsg(m){
+  if(!m)return;
+  if(m.t==='ctlok'){C.joined=true;C.status='';return}
+  if(m.t==='c'){
+    if(C.lv!==null&&m.lv!==C.lv)C.msg='Lister oppdatert: '+m.nl+' stk'+(m.lf?' ('+m.lf+' ikke klar ennå – vent 1–2 min)':'');
+    C.lv=m.lv;C.st=m;C.status='';render();
+  }
+}
+function ctlSend(a,v){
+  try{C.conn.send({t:'cmd',a:a,v:v})}catch(e){C.status='Ikke koblet til – prøver igjen…';render()}
+}
+function ctlBtn(label,cmd,cls,x){return '<button class="btn '+(cls||'')+'" data-a="cmd" data-v="'+cmd+'"'+(x!=null?' data-x="'+x+'"':'')+'>'+label+'</button>'}
+function ctlMode(s){
+  if(s.no)return '<div class="sec" style="text-align:center">Neste spørsmål</div><div class="tabs" style="justify-content:center;padding-right:0"><span class="tab on">🔔 Eget spørsmål – alltid buzzer</span></div>';
+  return '<div class="sec" style="text-align:center">Neste spørsmål spilles som</div><div class="tabs" style="justify-content:center;padding-right:0">'+
+  '<button class="tab'+(s.mode==='a'?' on':'')+'" data-a="cmd" data-v="mode" data-x="a">A B C D</button>'+
+  '<button class="tab'+(s.mode==='b'?' on':'')+'" data-a="cmd" data-v="mode" data-x="b">🔔 Buzzer</button></div>';
+}
+function vCtl(){
+  var s=C.st,h='<div class="wrap">';
+  if(C.status)h+='<p class="note">'+esc(C.status)+'</p>';
+  if(!s)return h+'<h1>Quizmester</h1><p class="sub">Kobler til rom '+esc(C.code)+' …</p><button class="btn ghost" data-a="ctlleave">Avbryt</button></div>';
+  var run=s.ph==='q'||s.ph==='buzz'||s.ph==='reveal';
+  h+='<div class="top" style="padding-right:46px"><span>🎙️ Rom '+esc(C.code)+'</span><span>'+(run?'Spørsmål '+s.i+' av '+s.n:s.players+' spillere')+'</span></div>';
+  if(s.ph==='lobby'){
+    h+='<div class="card"><p class="sub" style="margin:0">'+(s.players?s.players+' spiller'+(s.players===1?'':'e')+' er med':'Venter på spillere …')+'</p></div>'+ctlMode(s)+
+    '<button class="btn big" data-a="cmd" data-v="start"'+(s.players?'':' disabled')+'>Start quiz</button>';
+  }else if(s.ph==='end'){
+    h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(s.top,5)+'</div>'+ctlBtn('Spill igjen (samme gjester)','again','big');
+  }else{
+    h+='<div class="card"><div class="q" style="font-size:20px;margin:0">'+esc(s.text)+'</div></div>'+
+    '<div class="card ansbox"><div class="note" style="margin:0">Riktig svar</div><div class="a">'+esc(s.ans)+'</div>'+(s.info?'<p class="note" style="text-align:left;margin:8px 0 0">'+esc(s.info).replace(/\n/g,'<br>')+'</p>':'')+'</div>';
+    var qh='';
+    (s.queue||[]).forEach(function(e,i){qh+='<div class="score"><span>'+({x:'❌',now:'▶️',ok:'✅',wait:'⏳'}[e.mark]||'–')+' '+(i+1)+'. '+esc(e.name)+'</span></div>'});
+    if(s.ph==='q'){
+      h+='<div class="buzzmsg">'+(s.qmode==='b'?'🔔 Venter på at noen trykker BUZZ':'Spillerne svarer A–D på mobilen')+'</div>'+ctlBtn('Vis fasit nå','reveal','ghost');
+    }else if(s.ph==='buzz'){
+      if(s.own){
+        h+='<div class="buzzmsg win">🔔 '+esc(s.who)+' svarer muntlig</div>'+
+        ctlBtn('✓ Godkjent','approve','ok big')+ctlBtn('✗ Feil svar','wrong','red big')+
+        '<div class="row">'+ctlBtn('Hopp over','skipturn','ghost')+ctlBtn('Vis fasit','reveal','ghost')+'</div>';
+      }else{
+        h+='<div class="buzzmsg win">🔔 '+esc(s.who)+' svarer A–D på mobilen</div>'+
+        '<div class="row">'+ctlBtn('Hopp over','skipturn','ghost')+ctlBtn('Vis fasit','reveal','ghost')+'</div>';
+      }
+      if(qh)h+='<div class="card" style="margin-top:12px"><h2>Køen</h2>'+qh+'</div>';
+    }else{
+      h+=(qh?'<div class="card"><h2>Svarte</h2>'+qh+'</div>':'')+
+      '<div class="card"><h2>Poeng</h2>'+scoreRows(s.top,5)+'</div>'+
+      ctlBtn(s.last?'Se sluttresultat':'Neste spørsmål','next','big')+(s.last?'':ctlMode(s));
+    }
+  }
+  h+='<div class="sec" style="margin-top:22px">Verktøy</div>'+
+  '<button class="btn ghost" data-a="cmd" data-v="lists" id="ctlupd">↻ Oppdater lister</button>'+(C.msg?'<p class="note">'+esc(C.msg)+'</p>':'');
+  if(run)h+=ctlBtn('Avslutt quizen','finish','red');
+  return h+'<button class="btn ghost" data-a="ctlleave" style="margin-top:12px">Forlat kontrollpanelet</button></div>';
 }
 
 /* ===== Spiller ===== */
@@ -1300,14 +1481,33 @@ app.addEventListener('click',function(e){
   else if(a==='approve')hostTurnResult(true,false);
   else if(a==='wrong')hostTurnResult(false,false);
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
+  else if(a==='ctlopen')ctlOpen();
+  else if(a==='ctlleave'){if(!C.joined||confirm('Forlate kontrollpanelet? Quizen fortsetter.'))leaveCtl()}
+  else if(a==='cmd'){
+    var cv=b.getAttribute('data-v'),cx=b.getAttribute('data-x');
+    if(cv==='finish'&&!confirm('Avslutte quizen nå? Alle får se sluttresultatet.'))return;
+    if(cv==='lists'){C.msg='Oppdaterer …';render()}
+    ctlSend(cv,cx);
+  }
+  else if(a==='reloadlists'){
+    KEEP=[];(LISTS||[]).forEach(function(l,i){var e=$('#L'+i);if(e&&e.checked)KEEP.push(l.f)});
+    LISTS=null;fillLists();
+  }
+  else if(a==='openall')setAllOpen(true);
+  else if(a==='closeall')setAllOpen(false);
 });
+app.addEventListener('toggle',function(e){
+  var d=e.target;if(!d.classList||!d.classList.contains('dt'))return;
+  var s=openSt();s[d.getAttribute('data-k')]=d.open;lsSet('fq-open',JSON.stringify(s));
+},true);
 
 app.addEventListener('change',function(e){
+  if(view==='setup'&&e.target.type==='checkbox')updCounts();
   if(e.target.id==='tsrc')setSrc(e.target.value);
   if(e.target.id==='ttype'){var tv=e.target.value;$('#tpers').style.display=tv==='p'?'':'none';$('#tcatrow').style.display=tv==='k'?'':'none';$('#tfame').value=tv==='l'?'2':'1'}
 });
 $('#refreshBtn').addEventListener('click',function(){
-  if((H.peer||P.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
+  if((H.peer||P.joined||C.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
   var go2=function(){location.reload()};
   try{
     var jobs=[];
