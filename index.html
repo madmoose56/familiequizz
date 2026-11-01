@@ -99,6 +99,7 @@ label.chk input{width:22px;height:22px}
 .wrap.wide .big{font-size:2.4vw}
 .wrap.wide .row{gap:1vw}
 }
+.ver{text-align:center;font-size:12px;opacity:.55;margin:18px 0 14px}
 .btn.ok{background:#22c55e;color:#04290f}
 .btn.sm{font-size:14px;padding:9px;margin:6px 0 0}
 .btn.big{font-size:24px;padding:24px;margin-top:12px}
@@ -233,6 +234,7 @@ window.onerror=function(m,u,l){var b=$('#errBox');b.style.display='block';b.text
 /* ===== Tilstand ===== */
 var view='home';
 var S={cats:null,own:true,count:10,secs:20};
+var APP_VER='v31'; /* hold lik cache-navnet i sw.js */
 var C={peer:null,conn:null,code:'',st:null,gen:0,joined:false,leaving:false,status:'',msg:'',lv:null};
 var H={ctls:[],queue:[],turn:0,peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
 var P={peer:null,conn:null,name:'',code:'',st:null,end:0,chosen:null,joined:false,leaving:false,gen:0,tick:null,status:''};
@@ -247,6 +249,7 @@ function render(){
   else if(view==='host')h=vHost();
   else if(view==='player')h=vPlayer();
   else if(view==='ctl')h=vCtl();
+  if(view!=='host'||H.phase==='lobby'||H.phase==='end')h+='<p class="ver">Familiequiz '+APP_VER+'</p>';
   app.innerHTML=h;
   window.scrollTo(0,0);
   if(view==='setup'){fillLists();updCounts()}
