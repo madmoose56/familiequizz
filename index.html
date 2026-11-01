@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Familiequizz">
+<meta name="apple-mobile-web-app-title" content="Familiequiz">
 <meta name="theme-color" content="#2e1065">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Familiequizz</title>
+<title>Familiequiz</title>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="temaer.js"></script>
 <style>
@@ -246,7 +246,7 @@ function isPhone(){return !lsGet('fq-admin','')&&window.matchMedia&&window.match
 function vHome(){
   var kode=(location.search.match(/kode=(\d+)/)||[])[1]||'';
   var n=loadOwn().length;
-  return '<div class="wrap"><h1>🎉 Familiequizz</h1><p class="sub">Quiz for venner og familie</p>'+
+  return '<div class="wrap"><h1>🎉 Familiequiz</h1><p class="sub">Quiz for venner og familie</p>'+
   '<div class="card"><h2>Bli med i en quiz</h2>'+
   '<input id="jcode" type="tel" inputmode="numeric" maxlength="4" placeholder="Kode (4 siffer)" value="'+esc(kode)+'">'+
   '<input id="jname" type="text" maxlength="14" placeholder="Ditt navn" value="'+esc(lsGet('fq-navn',''))+'">'+
@@ -270,12 +270,55 @@ function vEditor(){
   '<label class="note" style="display:block;text-align:left">Bilder til svarsiden (valgfritt, opptil 4)'+(e&&e.imgs&&e.imgs.length?' – har '+e.imgs.length+' fra før, velg nye for å bytte':'')+'</label><input id="eimgs" type="file" accept="image/*" multiple>'+
   '<p class="note">Egne spørsmål spilles alltid som buzzer, uten nedtelling. Spilleren svarer muntlig, og du trykker «Godkjent» eller «Feil svar» på kontrollskjermen. Svarsiden vises for alle når svaret er godkjent.</p>'+
   '<button class="btn" data-a="saveq">'+(e?'Lagre endringer':'Lagre spørsmål')+'</button>'+(e?'<button class="btn ghost" data-a="cancelq">Avbryt</button>':'')+'</div>';
-  h+='<div class="card"><h2>Lagrede ('+own.length+')</h2>';
+  h+='<div><div class="card"><h2>Liste fra Excel/CSV</h2><p class="note">Spørsmål og bilder ligger i mappen <b>sporsmal/</b> i prosjektet (sporsmal.csv og sporsmal/bilder/). Etter at listen er lastet opp, trykker du knappen under. Spørsmål som kom fra listen byttes ut hver gang, mens de du la inn for hånd beholdes.</p>'+
+  '<button class="btn" data-a="importlist">Hent fra liste</button><p class="note" id="imst"></p></div>'+
+  '<div class="card"><h2>Lagrede ('+own.length+')</h2>';
   if(!own.length)h+='<p class="note">Ingen ennå.</p>';
   for(var i=0;i<own.length;i++){
     h+='<div class="qrow">'+(own[i].img?'<img src="'+own[i].img+'" alt="">':'')+'<span>'+esc(own[i].t)+'<br><small>✓ '+esc(own[i].c)+'</small></span><button class="x" data-a="editq" data-i="'+i+'">Rediger</button><button class="x" data-a="delq" data-i="'+i+'">Slett</button></div>';
   }
-  return h+'</div><p class="note">Spørsmålene lagres i nettleseren på denne enheten.</p></div></div>';
+  return h+'</div></div><p class="note">Spørsmålene lagres i nettleseren på denne enheten.</p></div></div>';
+}
+/* CSV (komma eller semikolon, anførselstegn, evt. BOM) → rader med celler */
+function parseCsv(txt){
+  txt=txt.replace(/^﻿/,'');
+  var first=txt.split(/\r?\n/)[0]||'',d=(first.split(';').length>=first.split(',').length)?';':',';
+  var rows=[],row=[],cell='',q=false;
+  for(var i=0;i<txt.length;i++){
+    var ch=txt.charAt(i);
+    if(q){
+      if(ch==='"'){if(txt.charAt(i+1)==='"'){cell+='"';i++}else q=false}else cell+=ch;
+    }else if(ch==='"')q=true;
+    else if(ch===d){row.push(cell);cell=''}
+    else if(ch==='\n'||ch==='\r'){
+      if(ch==='\r'&&txt.charAt(i+1)==='\n')i++;
+      row.push(cell);cell='';rows.push(row);row=[];
+    }else cell+=ch;
+  }
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows;
+}
+function listImg(n){n=(n||'').trim();if(!n)return null;return /^(https?:|data:)/.test(n)?n:'sporsmal/bilder/'+encodeURI(n)}
+/* Kolonner: Spørsmål; Riktig svar; Svarside-tekst; Spørsmålsbilde; Svarbilde 1–4 */
+function importList(){
+  var st=$('#imst');function say(m){if(st)st.textContent=m}
+  say('Henter …');
+  fetch('sporsmal/sporsmal.csv?t='+Date.now(),{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}).then(function(txt){
+    var rows=parseCsv(txt);
+    if(rows.length&&/sp[øo]rsm/i.test(rows[0][0]||''))rows.shift();
+    var items=[],skipped=0;
+    rows.forEach(function(r){
+      var t=(r[0]||'').trim(),c=(r[1]||'').trim();
+      if(!t&&!c)return;
+      if(!t||!c){skipped++;return}
+      var imgs=[];for(var k=4;k<=7;k++){var u=listImg(r[k]);if(u)imgs.push(u)}
+      items.push({t:t,c:c,w:[],img:listImg(r[3]),info:(r[2]||'').trim(),imgs:imgs,list:true});
+    });
+    var own=loadOwn().filter(function(o){return !o.list}).concat(items);
+    if(!lsSet(OWN_KEY,JSON.stringify(own))){say('Fikk ikke lagret.');return}
+    editIdx=-1;render();
+    var s2=$('#imst');if(s2)s2.textContent='Hentet '+items.length+' spørsmål fra listen'+(skipped?' ('+skipped+' rader mangler spørsmål eller svar og ble hoppet over)':'')+'.';
+  }).catch(function(e){say('Kunne ikke hente listen ('+e.message+'). Ligger sporsmal/sporsmal.csv i prosjektet og er det lastet opp?')});
 }
 function shrink(file,cb,max){
   var url=URL.createObjectURL(file),im=new Image();
@@ -771,7 +814,7 @@ function startHost(){
 }
 function openRoom(tries){
   var code=String(1000+Math.floor(Math.random()*9000));
-  var p=new Peer('familiequizz-'+code);
+  var p=new Peer('familiequiz-'+code);
   p.on('open',function(){
     H.peer=p;H.code=code;H.phase='lobby';H.qi=-1;
     try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){H.lock=l},function(){})}catch(e){}
@@ -1106,7 +1149,7 @@ function connectPlayer(){
   timeout=setTimeout(function(){bad('Fant ikke rommet. Sjekk koden, og at verten har appen åpen.')},12000);
   peer.on('error',function(e){bad(e.type==='peer-unavailable'?'Fant ikke rommet. Sjekk koden, og at verten har appen åpen.':'Tilkoblingsfeil ('+e.type+').')});
   peer.on('open',function(){
-    var c=peer.connect('familiequizz-'+P.code,{reliable:true});P.conn=c;
+    var c=peer.connect('familiequiz-'+P.code,{reliable:true});P.conn=c;
     c.on('open',function(){clearTimeout(timeout);c.send({t:'join',name:P.name})});
     c.on('data',function(m){if(gen===P.gen)playerMsg(m)});
     c.on('close',function(){bad('Mistet forbindelsen.')});
@@ -1219,6 +1262,7 @@ app.addEventListener('click',function(e){
   else if(a==='cancelq'){editIdx=-1;render()}
   else if(a==='home')go('home');
   else if(a==='saveq')saveQ();
+  else if(a==='importlist')importList();
   else if(a==='delq'){if(confirm('Slette spørsmålet?')){var o=loadOwn();o.splice(i,1);lsSet(OWN_KEY,JSON.stringify(o));editIdx=-1;render()}}
   else if(a==='open')startHost();
   else if(a==='start')hostNext();
@@ -1229,7 +1273,7 @@ app.addEventListener('click',function(e){
   else if(a==='close'){if(confirm('Avslutte quizen for alle?'))hostClose()}
   else if(a==='share'){
     var u=location.href.split('?')[0].split('#')[0]+'?kode='+H.code;
-    if(navigator.share)navigator.share({title:'Familiequizz',text:'Bli med i quizen! Kode: '+H.code,url:u}).catch(function(){});
+    if(navigator.share)navigator.share({title:'Familiequiz',text:'Bli med i quizen! Kode: '+H.code,url:u}).catch(function(){});
     else prompt('Kopier lenken:',u);
   }
   else if(a==='ans')playerAnswer(i);

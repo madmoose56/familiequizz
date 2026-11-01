@@ -1,6 +1,6 @@
 {
-  "name": "Familiequizz",
-  "short_name": "Familiequizz",
+  "name": "Familiequiz",
+  "short_name": "Familiequiz",
   "description": "Quiz for venner og familie",
   "start_url": "./",
   "scope": "./",
