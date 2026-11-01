@@ -234,9 +234,8 @@ window.onerror=function(m,u,l){var b=$('#errBox');b.style.display='block';b.text
 /* ===== Tilstand ===== */
 var view='home';
 var S={cats:null,own:true,count:10,secs:20};
-var APP_VER='v31'; /* hold lik cache-navnet i sw.js */
-var C={peer:null,conn:null,code:'',st:null,gen:0,joined:false,leaving:false,status:'',msg:'',lv:null};
-var H={ctls:[],queue:[],turn:0,peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
+var APP_VER='v32'; /* hold lik cache-navnet i sw.js */
+var H={views:[],queue:[],turn:0,peer:null,code:'',players:{},phase:'lobby',qs:[],qi:-1,endsAt:0,timer:null,cfg:null,counts:[0,0,0,0],lock:null};
 var P={peer:null,conn:null,name:'',code:'',st:null,end:0,chosen:null,joined:false,leaving:false,gen:0,tick:null,status:''};
 
 function go(v){view=v;render()}
@@ -248,7 +247,6 @@ function render(){
   else if(view==='themes')h=vThemes();
   else if(view==='host')h=vHost();
   else if(view==='player')h=vPlayer();
-  else if(view==='ctl')h=vCtl();
   if(view!=='host'||H.phase==='lobby'||H.phase==='end')h+='<p class="ver">Familiequiz '+APP_VER+'</p>';
   app.innerHTML=h;
   window.scrollTo(0,0);
@@ -269,8 +267,6 @@ function vHome(){
   '<input id="jcode" type="tel" inputmode="numeric" maxlength="4" placeholder="Kode (4 siffer)" value="'+esc(kode)+'">'+
   '<input id="jname" type="text" maxlength="14" placeholder="Ditt navn" value="'+esc(lsGet('fq-navn',''))+'">'+
   '<button class="btn" data-a="join">Bli med</button></div>'+
-  '<div class="card"><h2>Quizmester (godkjenne svar)</h2><input id="ccode" type="tel" inputmode="numeric" maxlength="4" placeholder="Rommets kode (4 siffer)" value="'+esc(lsGet('fq-ctlkode',''))+'">'+
-  '<button class="btn ghost" data-a="ctlopen">Åpne kontrollpanel</button></div>'+
   (isPhone()?'':'<div class="card"><h2>Vær vert (admin)</h2><button class="btn" data-a="new">Start ny quiz</button>'+
   '<button class="btn ghost" data-a="own">Våre egne spørsmål ('+n+')</button></div>'+
   '<p class="note">Verten må la appen stå åpen under hele quizen.</p>')+'</div>';
@@ -907,42 +903,21 @@ function ranked(){var a=[];for(var k in H.players)a.push(H.players[k]);a.sort(fu
 function onlineList(){return ranked().filter(function(p){return p.online})}
 function allAnswered(){var o=onlineList();if(!o.length)return false;return o.every(function(p){return !!p.ans})}
 function answeredCount(){var n=0,o=onlineList();o.forEach(function(p){if(p.ans)n++});return n+' av '+o.length+' har svart'}
-/* Quizmester-mobil: ser riktig svar, godkjenner/avviser muntlige svar og styrer quizen */
-function ctlState(){
-  var q=H.qs[H.qi],r=ranked();
-  var s={t:'c',ph:H.phase,n:H.qs.length,i:H.qi+1,players:onlineList().length,mode:H.cfg.mode,lv:LISTVER,nl:(LISTS||[]).length,lf:LISTFAIL,
-    top:r.slice(0,5).map(function(x){return {name:x.name,score:x.score}}),last:H.qi+1>=H.qs.length,no:!!(H.qs[H.qi+1]&&H.qs[H.qi+1].own)};
+/* Svar-side (svar.html): quizmesterens iPhone får riktig svar samtidig som spørsmålet vises */
+function svarUrl(){return location.href.split('?')[0].split('#')[0].replace(/[^\/]*$/,'')+'svar.html?kode='+H.code}
+function viewState(){
+  var q=H.qs[H.qi],s={t:'v',ph:H.phase,n:H.qs.length,i:H.qi+1,players:onlineList().length};
   if(q&&H.phase!=='lobby'&&H.phase!=='end'){
-    s.text=q.text;s.ans=q.opts[q.correct];s.info=q.info||'';s.own=!!q.own;s.qmode=H.qmode;
-    s.queue=H.queue.map(function(e,i){
-      var p=H.players[e.name],mk;
-      if(H.phase==='buzz')mk=i<H.turn?'x':(i===H.turn?'now':'wait');
-      else mk=i<H.turn?'x':(i===H.turn&&p&&p.last&&p.last.ok?'ok':'-');
-      return {name:e.name,mark:mk};
-    });
+    s.text=q.text;s.ans=q.opts[q.correct];s.info=q.info||'';s.own=!!q.own;s.buzz=H.qmode==='b';
     if(H.phase==='buzz'&&H.queue[H.turn])s.who=H.queue[H.turn].name;
   }
   return s;
 }
-function sendCtl(c){try{c.send(ctlState())}catch(e){}}
-function sendCtls(){H.ctls.forEach(sendCtl)}
-function hostCmd(m){
-  var a=m.a,q=H.qs[H.qi],own=!!(q&&q.own);
-  if(a==='approve'){if(H.phase==='buzz'&&own)hostTurnResult(true,false)}
-  else if(a==='wrong'){if(H.phase==='buzz'&&own)hostTurnResult(false,false)}
-  else if(a==='skipturn'){if(H.phase==='buzz')hostTurnResult(false,true)}
-  else if(a==='reveal')hostReveal();
-  else if(a==='next'){if(H.phase==='reveal')hostNext()}
-  else if(a==='start'){if(H.phase==='lobby'&&onlineList().length)hostNext()}
-  else if(a==='finish')hostFinish();
-  else if(a==='again'){if(H.phase==='end')hostAgain()}
-  else if(a==='mode'){H.cfg.mode=m.v==='b'?'b':'a';broadcast();render()}
-  else if(a==='lists')loadLists(function(){sendCtls();if(view==='setup')fillLists()});
-}
+function sendView(c){try{c.send(viewState())}catch(e){}}
+function sendViews(){H.views.forEach(sendView)}
 function hostMsg(conn,m){
   if(!m)return;
-  if(m.t==='ctl'){conn._ctl=true;if(H.ctls.indexOf(conn)<0)H.ctls.push(conn);try{conn.send({t:'ctlok'})}catch(e){}sendCtl(conn);return}
-  if(m.t==='cmd'){if(conn._ctl)hostCmd(m);return}
+  if(m.t==='view'){conn._view=true;if(H.views.indexOf(conn)<0)H.views.push(conn);sendView(conn);return}
   if(m.t==='join'){
     var name=String(m.name||'').trim().slice(0,14);
     if(!name){conn.send({t:'err',m:'Skriv et navn.'});return}
@@ -977,7 +952,7 @@ function hostMsg(conn,m){
   }
 }
 function hostDrop(conn){
-  if(conn._ctl){H.ctls=H.ctls.filter(function(c){return c!==conn});return}
+  if(conn._view){H.views=H.views.filter(function(c){return c!==conn});return}
   var p=H.players[conn._name];
   if(p&&p.conn===conn){
     p.online=false;refreshHost();
@@ -1041,9 +1016,9 @@ function stateFor(p){
   return {t:'s',ph:'end',you:{score:p.score,rank:r.indexOf(p)+1},top:top(50)};
 }
 function sendTo(p){if(p.conn&&p.online){try{p.conn.send(stateFor(p))}catch(e){}}}
-function broadcast(){for(var k in H.players)sendTo(H.players[k]);sendCtls()}
+function broadcast(){for(var k in H.players)sendTo(H.players[k]);sendViews()}
 function refreshHost(){
-  sendCtls();
+  sendViews();
   if(view!=='host')return;
   if(H.phase==='q'){
     var e=$('#cnt');if(e)e.textContent=answeredCount();
@@ -1086,7 +1061,7 @@ function hostClose(){
   if(H.timer){clearInterval(H.timer);H.timer=null}
   try{if(H.peer)H.peer.destroy()}catch(e){}
   try{if(H.lock)H.lock.release()}catch(e){}
-  H.peer=null;H.players={};H.ctls=[];H.phase='lobby';go('home');
+  H.peer=null;H.players={};H.views=[];H.phase='lobby';go('home');
 }
 function optsHtml(q,mode){
   var h='<div class="opts">';
@@ -1175,6 +1150,8 @@ function vHost(){
     h+='<div class="small">Åpne denne siden på mobilen</div><div class="url">'+esc(url)+'</div>'+
     '<div class="small">og skriv inn koden</div><div class="code">'+H.code+'</div>'+
     '<button class="btn ghost" data-a="share">Del lenke med kode</button>'+
+    '<div class="small" style="margin-top:14px">Quizmester: åpne <b>'+esc(svarUrl())+'</b> på iPhone</div>'+
+    '<button class="btn ghost" data-a="sharesvar">Del svar-lenke til quizmester</button>'+
     '<div class="chips">'+(r.length?r.map(function(p){return '<span class="chip'+(p.online?'':' off')+'">'+esc(p.name)+'</span>'}).join(''):'<span class="note">Venter på spillere…</span>')+'</div>'+
     modeToggle('Spillmåte for første spørsmål',H.qs[0])+
     '<button class="btn" data-a="start"'+(onlineList().length?'':' disabled')+'>Start quiz ('+H.qs.length+' spørsmål)</button>'+
@@ -1219,100 +1196,6 @@ function vHost(){
     '<button class="btn" data-a="again">Spill igjen (samme gjester)</button><button class="btn red" data-a="close">Avslutt</button>';
   }
   return h+'</div>';
-}
-
-/* ===== Quizmester-panel (mobil) ===== */
-function ctlOpen(){
-  var code=$('#ccode').value.trim();
-  if(typeof Peer==='undefined'){alert('Fikk ikke lastet PeerJS. Sjekk nettet og prøv igjen.');return}
-  if(!/^\d{4}$/.test(code)){alert('Koden har 4 siffer.');return}
-  lsSet('fq-ctlkode',code);
-  C.code=code;C.st=null;C.joined=false;C.leaving=false;C.msg='';C.lv=null;C.status='Kobler til…';
-  view='ctl';render();connectCtl();
-}
-function stopCtl(){
-  C.gen++;
-  try{if(C.conn)C.conn.close()}catch(e){}
-  try{if(C.peer)C.peer.destroy()}catch(e){}
-  C.conn=null;C.peer=null;
-}
-function leaveCtl(msg){C.leaving=true;stopCtl();if(msg)alert(msg);go('home')}
-function connectCtl(){
-  if(C.leaving)return;
-  stopCtl();
-  var gen=C.gen,done=false,timeout;
-  function bad(msg){
-    if(done||gen!==C.gen||C.leaving)return;done=true;clearTimeout(timeout);
-    if(!C.joined){leaveCtl(msg)}
-    else{C.status='Mistet forbindelsen – prøver igjen…';render();setTimeout(connectCtl,3000)}
-  }
-  var peer=new Peer();C.peer=peer;
-  timeout=setTimeout(function(){bad('Fant ikke rommet. Sjekk koden, og at verten har appen åpen.')},12000);
-  peer.on('error',function(e){bad(e.type==='peer-unavailable'?'Fant ikke rommet. Sjekk koden, og at verten har appen åpen.':'Tilkoblingsfeil ('+e.type+').')});
-  peer.on('open',function(){
-    var c=peer.connect('familiequiz-'+C.code,{reliable:true});C.conn=c;
-    c.on('open',function(){clearTimeout(timeout);c.send({t:'ctl'})});
-    c.on('data',function(m){if(gen===C.gen)ctlMsg(m)});
-    c.on('close',function(){bad('Mistet forbindelsen.')});
-    c.on('error',function(){bad('Tilkoblingsfeil.')});
-  });
-}
-function ctlMsg(m){
-  if(!m)return;
-  if(m.t==='ctlok'){C.joined=true;C.status='';return}
-  if(m.t==='c'){
-    if(C.lv!==null&&m.lv!==C.lv)C.msg='Lister oppdatert: '+m.nl+' stk'+(m.lf?' ('+m.lf+' ikke klar ennå – vent 1–2 min)':'');
-    C.lv=m.lv;C.st=m;C.status='';render();
-  }
-}
-function ctlSend(a,v){
-  try{C.conn.send({t:'cmd',a:a,v:v})}catch(e){C.status='Ikke koblet til – prøver igjen…';render()}
-}
-function ctlBtn(label,cmd,cls,x){return '<button class="btn '+(cls||'')+'" data-a="cmd" data-v="'+cmd+'"'+(x!=null?' data-x="'+x+'"':'')+'>'+label+'</button>'}
-function ctlMode(s){
-  if(s.no)return '<div class="sec" style="text-align:center">Neste spørsmål</div><div class="tabs" style="justify-content:center;padding-right:0"><span class="tab on">🔔 Eget spørsmål – alltid buzzer</span></div>';
-  return '<div class="sec" style="text-align:center">Neste spørsmål spilles som</div><div class="tabs" style="justify-content:center;padding-right:0">'+
-  '<button class="tab'+(s.mode==='a'?' on':'')+'" data-a="cmd" data-v="mode" data-x="a">A B C D</button>'+
-  '<button class="tab'+(s.mode==='b'?' on':'')+'" data-a="cmd" data-v="mode" data-x="b">🔔 Buzzer</button></div>';
-}
-function vCtl(){
-  var s=C.st,h='<div class="wrap">';
-  if(C.status)h+='<p class="note">'+esc(C.status)+'</p>';
-  if(!s)return h+'<h1>Quizmester</h1><p class="sub">Kobler til rom '+esc(C.code)+' …</p><button class="btn ghost" data-a="ctlleave">Avbryt</button></div>';
-  var run=s.ph==='q'||s.ph==='buzz'||s.ph==='reveal';
-  h+='<div class="top" style="padding-right:46px"><span>🎙️ Rom '+esc(C.code)+'</span><span>'+(run?'Spørsmål '+s.i+' av '+s.n:s.players+' spillere')+'</span></div>';
-  if(s.ph==='lobby'){
-    h+='<div class="card"><p class="sub" style="margin:0">'+(s.players?s.players+' spiller'+(s.players===1?'':'e')+' er med':'Venter på spillere …')+'</p></div>'+ctlMode(s)+
-    '<button class="btn big" data-a="cmd" data-v="start"'+(s.players?'':' disabled')+'>Start quiz</button>';
-  }else if(s.ph==='end'){
-    h+='<h1>🏆 Resultat</h1><div class="card">'+scoreRows(s.top,5)+'</div>'+ctlBtn('Spill igjen (samme gjester)','again','big');
-  }else{
-    h+='<div class="card"><div class="q" style="font-size:20px;margin:0">'+esc(s.text)+'</div></div>'+
-    '<div class="card ansbox"><div class="note" style="margin:0">Riktig svar</div><div class="a">'+esc(s.ans)+'</div>'+(s.info?'<p class="note" style="text-align:left;margin:8px 0 0">'+esc(s.info).replace(/\n/g,'<br>')+'</p>':'')+'</div>';
-    var qh='';
-    (s.queue||[]).forEach(function(e,i){qh+='<div class="score"><span>'+({x:'❌',now:'▶️',ok:'✅',wait:'⏳'}[e.mark]||'–')+' '+(i+1)+'. '+esc(e.name)+'</span></div>'});
-    if(s.ph==='q'){
-      h+='<div class="buzzmsg">'+(s.qmode==='b'?'🔔 Venter på at noen trykker BUZZ':'Spillerne svarer A–D på mobilen')+'</div>'+ctlBtn('Vis fasit nå','reveal','ghost');
-    }else if(s.ph==='buzz'){
-      if(s.own){
-        h+='<div class="buzzmsg win">🔔 '+esc(s.who)+' svarer muntlig</div>'+
-        ctlBtn('✓ Godkjent','approve','ok big')+ctlBtn('✗ Feil svar','wrong','red big')+
-        '<div class="row">'+ctlBtn('Hopp over','skipturn','ghost')+ctlBtn('Vis fasit','reveal','ghost')+'</div>';
-      }else{
-        h+='<div class="buzzmsg win">🔔 '+esc(s.who)+' svarer A–D på mobilen</div>'+
-        '<div class="row">'+ctlBtn('Hopp over','skipturn','ghost')+ctlBtn('Vis fasit','reveal','ghost')+'</div>';
-      }
-      if(qh)h+='<div class="card" style="margin-top:12px"><h2>Køen</h2>'+qh+'</div>';
-    }else{
-      h+=(qh?'<div class="card"><h2>Svarte</h2>'+qh+'</div>':'')+
-      '<div class="card"><h2>Poeng</h2>'+scoreRows(s.top,5)+'</div>'+
-      ctlBtn(s.last?'Se sluttresultat':'Neste spørsmål','next','big')+(s.last?'':ctlMode(s));
-    }
-  }
-  h+='<div class="sec" style="margin-top:22px">Verktøy</div>'+
-  '<button class="btn ghost" data-a="cmd" data-v="lists" id="ctlupd">↻ Oppdater lister</button>'+(C.msg?'<p class="note">'+esc(C.msg)+'</p>':'');
-  if(run)h+=ctlBtn('Avslutt quizen','finish','red');
-  return h+'<button class="btn ghost" data-a="ctlleave" style="margin-top:12px">Forlat kontrollpanelet</button></div>';
 }
 
 /* ===== Spiller ===== */
@@ -1477,6 +1360,11 @@ app.addEventListener('click',function(e){
     if(navigator.share)navigator.share({title:'Familiequiz',text:'Bli med i quizen! Kode: '+H.code,url:u}).catch(function(){});
     else prompt('Kopier lenken:',u);
   }
+  else if(a==='sharesvar'){
+    var su=svarUrl();
+    if(navigator.share)navigator.share({title:'Familiequiz – svar',text:'Riktig svar til quizmester. Kode: '+H.code,url:su}).catch(function(){});
+    else prompt('Kopier lenken:',su);
+  }
   else if(a==='ans')playerAnswer(i);
   else if(a==='buzz')playerBuzz();
   else if(a==='setmode'){H.cfg.mode=b.getAttribute('data-v');render()}
@@ -1484,14 +1372,6 @@ app.addEventListener('click',function(e){
   else if(a==='approve')hostTurnResult(true,false);
   else if(a==='wrong')hostTurnResult(false,false);
   else if(a==='leave'){if(confirm('Forlate quizen?'))leavePlayer()}
-  else if(a==='ctlopen')ctlOpen();
-  else if(a==='ctlleave'){if(!C.joined||confirm('Forlate kontrollpanelet? Quizen fortsetter.'))leaveCtl()}
-  else if(a==='cmd'){
-    var cv=b.getAttribute('data-v'),cx=b.getAttribute('data-x');
-    if(cv==='finish'&&!confirm('Avslutte quizen nå? Alle får se sluttresultatet.'))return;
-    if(cv==='lists'){C.msg='Oppdaterer …';render()}
-    ctlSend(cv,cx);
-  }
   else if(a==='reloadlists'){
     KEEP=[];(LISTS||[]).forEach(function(l,i){var e=$('#L'+i);if(e&&e.checked)KEEP.push(l.f)});
     LISTS=null;fillLists();
@@ -1510,7 +1390,7 @@ app.addEventListener('change',function(e){
   if(e.target.id==='ttype'){var tv=e.target.value;$('#tpers').style.display=tv==='p'?'':'none';$('#tcatrow').style.display=tv==='k'?'':'none';$('#tfame').value=tv==='l'?'2':'1'}
 });
 $('#refreshBtn').addEventListener('click',function(){
-  if((H.peer||P.joined||C.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
+  if((H.peer||P.joined)&&!confirm('Oppdatere appen? Du blir koblet fra quizen og må bli med igjen.'))return;
   var go2=function(){location.reload()};
   try{
     var jobs=[];

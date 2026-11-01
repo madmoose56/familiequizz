@@ -1,4 +1,4 @@
-# Familiequiz – prosjektnotater for Claude Code
+﻿# Familiequiz – prosjektnotater for Claude Code
 
 Svar alltid på norsk (bokmål). Eieren, Stein Arne, skriver norsk og er ikke utvikler: forklar enkelt og gi korte steg.
 
@@ -26,7 +26,7 @@ Repo: `madmoose56/Familiequiz` → GitHub Pages (gren `main`, rot).
 - Bilmerker: logoer på Wikidata/Commons har nesten alltid navnet i selve bildet (OCR med Tesseract.js fanger bare ~halvparten), derfor brukes bilder av bilmodeller (P176 produsent, maks 3 per merke) i stedet for logoer. Fotball-logoer kjøres gjennom OCR-filter (`ocrFilter`, to leseformer), men er ikke 100 % trygge – admin må se over med ✕.
 - Egne spørsmål: bare riktig svar (ingen A–D), svares muntlig, vert trykker Godkjent/Feil svar (approve/wrong); alltid buzzer (q.own), felt info (tekst) og imgs (opptil 4 bilder) vises på en svarside (infoPage) i fasit; liste «Svarte» (queueResultHtml) oppe til høyre.
 - Spørsmålslister: alle `sporsmal/*.csv` (+ `sporsmal/bilder/`, se LES-MEG.txt) listes i `sporsmal/lister.json` (lages med `node sporsmal/lag-liste.js` – kjør før hver opplasting). Vises som avkrysning under «Våre egne» i Start quiz (loadLists/fillLists/buildQs).
-- Quizmester-panel (mobil): hjem → «Quizmester» + romkode → view `ctl` (vCtl/ctlState/hostCmd). Peer sender {t:'ctl'}, kommandoer {t:'cmd',a,v}. Viser riktig svar privat, Godkjent/Feil/Hopp over, Neste, modus, «Oppdater lister».
+- Quizmester-side: `svar.html` (egen side, kode via ?kode=XXXX). Kobler til vert med {t:'view'}; vert sender viewState() ved hver endring (nytt spørsmål → riktig svar vises samtidig). Kun visning, all styring (Godkjent/Feil/Neste) skjer på vert-skjermen (PC/iPad). Vert-lobbyen viser lenken (svarUrl) og «Del svar-lenke».
 - Lister finnes via GitHub-API (sporsmal/) + lister.json som reserve (listFiles/loadLists). Seksjoner i Temaer er `<details class="dt">` (sect/updCounts).
 - Oppdater-pil (↻) øverst til høyre tømmer cache og laster på nytt.
 
